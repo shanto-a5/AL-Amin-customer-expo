@@ -157,7 +157,6 @@ function CustomerHomeScreen({ session }: { session: SessionContextValue }): Reac
     [OPERATOR_LIST[0], OPERATOR_LIST[1]],
     [OPERATOR_LIST[2], OPERATOR_LIST[3]],
   ] as const;
-  const fifthOperator = OPERATOR_LIST[4];
 
   return (
     <Screen
@@ -251,12 +250,6 @@ function CustomerHomeScreen({ session }: { session: SessionContextValue }): Reac
               />
             </View>
           ))}
-          {fifthOperator ? (
-            <OperatorTile
-              operator={fifthOperator}
-              onPress={() => navigateToOperator(fifthOperator.code)}
-            />
-          ) : null}
         </View>
       </View>
 

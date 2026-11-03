@@ -1,6 +1,7 @@
 import { type Href } from 'expo-router';
 import * as React from 'react';
 import {
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -19,6 +20,7 @@ import {
   formatBdt,
   formatBdtNumber,
   OPERATORS,
+  OPERATOR_LOGOS,
   radius,
   spacing,
   type,
@@ -233,10 +235,12 @@ export function WalletBalanceCard({
 export function OperatorTile({
   operator,
   onPress,
+  selected = false,
   style,
 }: {
   operator: OperatorMeta;
   onPress: () => void;
+  selected?: boolean;
   style?: StyleProp<ViewStyle>;
 }): React.JSX.Element {
   const { width } = useWindowDimensions();
@@ -250,7 +254,17 @@ export function OperatorTile({
       style={({ pressed }) => [
         styles.operatorTile,
         compact && styles.operatorTileCompact,
-        pressed && styles.operatorTilePressed,
+        (pressed || selected) && [
+          styles.operatorTilePressed,
+          {
+            borderColor: operator.color,
+            shadowColor: operator.color,
+            shadowOpacity: 0.45,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 0 },
+            elevation: 4,
+          },
+        ],
         style,
       ]}
     >
@@ -258,16 +272,13 @@ export function OperatorTile({
         style={[
           styles.operatorSymbol,
           compact && styles.operatorSymbolCompact,
-          { backgroundColor: operator.softBg },
         ]}
       >
-        <Text
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          style={[styles.operatorSymbolText, { color: operator.color }]}
-        >
-          {operator.symbolLabel}
-        </Text>
+        <Image
+          source={OPERATOR_LOGOS[operator.code]}
+          style={compact ? styles.operatorLogoCompact : styles.operatorLogo}
+          resizeMode="contain"
+        />
       </View>
 
       <View style={styles.operatorCopy}>
@@ -336,17 +347,36 @@ export function OfferRow({
       accessibilityLabel={`${opMeta.name} ${offer.title}, ${formatBdt(offer.price)}, valid ${offer.validity}`}
       style={({ pressed }) => [
         styles.offerRow,
-        selected && styles.offerRowSelected,
-        pressed && styles.offerRowPressed,
+        selected && [
+          styles.offerRowSelected,
+          {
+            borderColor: opMeta.color,
+            shadowColor: opMeta.color,
+            shadowOpacity: 0.35,
+            shadowRadius: 8,
+          },
+        ],
+        pressed && [
+          styles.offerRowPressed,
+          { borderColor: opMeta.color },
+        ],
       ]}
     >
+      {showOperator ? (
+        <View style={styles.offerLogoWrap}>
+          <Image
+            source={OPERATOR_LOGOS[opMeta.code]}
+            style={styles.offerLogo}
+            resizeMode="contain"
+          />
+        </View>
+      ) : null}
+
       <View style={styles.offerLeft}>
         <View style={styles.offerMetaRow}>
-          {showOperator ? (
-            <View style={[styles.offerTag, { backgroundColor: opMeta.softBg }]}>
-              <Text style={[styles.offerTagText, { color: opMeta.color }]}>{opMeta.name}</Text>
-            </View>
-          ) : null}
+          <View style={[styles.offerTag, { backgroundColor: opMeta.softBg }]}>
+            <Text style={[styles.offerTagText, { color: opMeta.color }]}>{opMeta.name}</Text>
+          </View>
           <View style={[styles.offerTag, { backgroundColor: catStyle.bg }]}>
             <Text style={[styles.offerTagText, { color: catStyle.fg }]}>{catStyle.label}</Text>
           </View>
@@ -703,23 +733,25 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   operatorSymbol: {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 3,
+    backgroundColor: '#000000',
   },
   operatorSymbolCompact: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     borderRadius: 10,
   },
-  operatorSymbolText: {
-    fontFamily: baseFontFamily,
-    fontSize: 10.5,
-    fontWeight: '800',
-    letterSpacing: -0.2,
+  operatorLogo: {
+    width: 40,
+    height: 40,
+  },
+  operatorLogoCompact: {
+    width: 34,
+    height: 34,
   },
   operatorCopy: {
     flex: 1,
@@ -750,6 +782,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  offerLogoWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  offerLogo: {
+    width: 40,
+    height: 40,
   },
   offerRowSelected: {
     backgroundColor: 'rgba(255, 147, 62, 0.12)',

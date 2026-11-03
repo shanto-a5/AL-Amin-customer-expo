@@ -47,8 +47,15 @@ export const baseFontFamily = Platform.select({
   default: undefined,
 });
 
-export type OperatorCode = 'GP' | 'ROBI' | 'BL' | 'AIRTEL' | 'TELETALK';
+export type OperatorCode = 'GP' | 'ROBI' | 'BL' | 'TELETALK';
 export type GatewayCode = 'BKASH' | 'NAGAD' | 'BANK';
+
+export const OPERATOR_LOGOS: Record<OperatorCode, any> = {
+  GP: require('../../assets/images/operators/gp.png'),
+  ROBI: require('../../assets/images/operators/robi.png'),
+  BL: require('../../assets/images/operators/bl.png'),
+  TELETALK: require('../../assets/images/operators/teletalk.png'),
+};
 
 export interface OperatorMeta {
   code: OperatorCode;
@@ -60,6 +67,7 @@ export interface OperatorMeta {
   softBg: string;
   prefixes: string[];
   tagline: string;
+  logo: any;
 }
 
 export const OPERATORS: Record<OperatorCode, OperatorMeta> = {
@@ -69,10 +77,11 @@ export const OPERATORS: Record<OperatorCode, OperatorMeta> = {
     bnName: 'গ্রামীণফোন',
     shortLabel: 'GP',
     symbolLabel: 'GP',
-    color: '#37D79D',
-    softBg: 'rgba(17, 190, 128, 0.14)',
+    color: '#00C8FF',
+    softBg: 'rgba(0, 200, 255, 0.14)',
     prefixes: ['017', '013'],
     tagline: '017 · 013 network',
+    logo: OPERATOR_LOGOS.GP,
   },
   ROBI: {
     code: 'ROBI',
@@ -80,10 +89,11 @@ export const OPERATORS: Record<OperatorCode, OperatorMeta> = {
     bnName: 'রবি',
     shortLabel: 'Robi',
     symbolLabel: 'ROBI',
-    color: '#FF7181',
-    softBg: 'rgba(255, 80, 97, 0.13)',
-    prefixes: ['018'],
-    tagline: '018 network',
+    color: '#F1471D',
+    softBg: 'rgba(241, 71, 29, 0.14)',
+    prefixes: ['018', '016'],
+    tagline: '018 · 016 network',
+    logo: OPERATOR_LOGOS.ROBI,
   },
   BL: {
     code: 'BL',
@@ -91,21 +101,11 @@ export const OPERATORS: Record<OperatorCode, OperatorMeta> = {
     bnName: 'বাংলালিংক',
     shortLabel: 'BL',
     symbolLabel: 'BL',
-    color: '#FFA04C',
-    softBg: 'rgba(255, 139, 45, 0.14)',
+    color: '#F36B16',
+    softBg: 'rgba(243, 107, 22, 0.14)',
     prefixes: ['019', '014'],
     tagline: '019 · 014 network',
-  },
-  AIRTEL: {
-    code: 'AIRTEL',
-    name: 'Airtel',
-    bnName: 'এয়ারটেল',
-    shortLabel: 'Airtel',
-    symbolLabel: 'airtel',
-    color: '#FF6B8E',
-    softBg: 'rgba(255, 63, 108, 0.13)',
-    prefixes: ['016'],
-    tagline: '016 network',
+    logo: OPERATOR_LOGOS.BL,
   },
   TELETALK: {
     code: 'TELETALK',
@@ -113,10 +113,11 @@ export const OPERATORS: Record<OperatorCode, OperatorMeta> = {
     bnName: 'টেলিটক',
     shortLabel: 'Teletalk',
     symbolLabel: 'TT',
-    color: '#73B5FF',
-    softBg: 'rgba(67, 156, 255, 0.13)',
+    color: '#6AC537',
+    softBg: 'rgba(106, 197, 55, 0.14)',
     prefixes: ['015'],
     tagline: '015 network',
+    logo: OPERATOR_LOGOS.TELETALK,
   },
 };
 
@@ -124,7 +125,6 @@ export const OPERATOR_LIST: OperatorMeta[] = [
   OPERATORS.GP,
   OPERATORS.ROBI,
   OPERATORS.BL,
-  OPERATORS.AIRTEL,
   OPERATORS.TELETALK,
 ];
 

@@ -4,7 +4,7 @@ export type Role = 'user' | 'admin';
 
 export type TransactionType = 'FLEXILOAD' | 'OFFER_PURCHASE' | 'ADD_MONEY';
 export type TransactionStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
-export type TelecomOperator = 'GP' | 'ROBI' | 'BL' | 'AIRTEL' | 'TELETALK';
+export type TelecomOperator = 'GP' | 'ROBI' | 'BL' | 'TELETALK';
 export type PaymentGatewayType = 'BKASH' | 'NAGAD' | 'BANK' | 'WALLET';
 export type OfferCategory = 'INTERNET' | 'COMBO' | 'MINUTES';
 
