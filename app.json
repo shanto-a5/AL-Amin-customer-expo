@@ -18,7 +18,8 @@
         "backgroundColor": "#0B1120"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.allpaybd.app"
+      "package": "com.allpaybd.app",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -33,6 +34,13 @@
           "image": "./assets/images/allpay-logo.jpeg",
           "imageWidth": 200
         }
+      ],
+      "@react-native-firebase/app",
+      [
+        "@react-native-firebase/messaging",
+        {
+          "installationIdEnabled": true
+        }
       ]
     ],
     "experiments": {
@@ -40,9 +48,13 @@
       "reactCompiler": false
     },
     "extra": {
-      "router": {},
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
       "eas": {
-        "projectId": "06b1f990-4b6a-4fb9-817f-5e9a5e8d8507"
+        "projectId": "6dab74b1-9f19-4a04-ba49-fbcb5065f03a"
       }
     }
   }

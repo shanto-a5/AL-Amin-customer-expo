@@ -5,6 +5,7 @@ import { ensureBooted } from '@/infrastructure/bootstrap';
 import { authService, type RegisterUserInput } from '@/services/auth-gateway';
 import { notificationService } from '@/services/notification-service';
 import { listingCache } from '@/services/listing-cache';
+import { setFcmUser, unregisterFcmOnLogout } from '@/services/fcm-manager';
 
 export type SessionStatus = 'checking' | 'signedIn' | 'signedOut';
 
@@ -34,6 +35,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
         if (current) {
           await notificationService.hydrate(current.id).catch(() => undefined);
           listingCache.markHydrated(current.id);
+          void setFcmUser(current);
         }
         if (mounted) {
           setUser(current);
@@ -63,6 +65,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
     }
     setUser(current ?? loggedIn);
     setStatus('signedIn');
+    void setFcmUser(current ?? loggedIn);
     return current ?? loggedIn;
   }, []);
 
@@ -73,11 +76,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
     listingCache.markHydrated(registered.id);
     setUser(registered);
     setStatus('signedIn');
+    void setFcmUser(registered);
     return registered;
   }, []);
 
   const signOut = React.useCallback(async (userId?: string): Promise<void> => {
     const accountId = userId ?? user?.id;
+    await unregisterFcmOnLogout().catch(() => undefined);
     await authService.logout(userId);
     if (accountId) listingCache.clearAccount(accountId);
     setUser(null);
@@ -86,6 +91,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
 
   const signOutEverywhere = React.useCallback(async (userId?: string): Promise<void> => {
     const accountId = userId ?? user?.id;
+    await unregisterFcmOnLogout().catch(() => undefined);
     await authService.logoutEverywhere(userId);
     if (accountId) listingCache.clearAccount(accountId);
     setUser(null);

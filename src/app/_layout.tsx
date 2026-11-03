@@ -9,10 +9,18 @@ import { GlobalProgressLine } from '@/components/global-progress-line';
 import { Button, Card } from '@/components/ui';
 import { useBootGate } from '@/infrastructure/bootstrap';
 import { SessionProvider } from '@/modules/session/session-context';
+import { initFcmManager } from '@/services/fcm-manager';
 import { colors, spacing, type } from '@/theme/tokens';
 
 export default function RootLayout(): React.JSX.Element {
   const boot = useBootGate();
+
+  React.useEffect(() => {
+    const cleanupFcm = initFcmManager();
+    return () => {
+      cleanupFcm();
+    };
+  }, []);
 
   React.useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;

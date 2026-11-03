@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "937072066964",
+    "project_id": "all-pay-bd",
+    "storage_bucket": "all-pay-bd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:937072066964:android:63ee1b1728bdea2b3e0f81",
+        "android_client_info": {
+          "package_name": "com.allpaybd.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD49-z1HelhBFYfh6RTC5hkGRqxtFo10BQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

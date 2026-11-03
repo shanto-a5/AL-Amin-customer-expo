@@ -394,6 +394,30 @@ export class VantaApi {
     return this.client.delete(`/notifications/${encodeURIComponent(id)}`);
   }
 
+  // ----------------------------------------------------------------- fcm / fid
+  registerFcm(input: {
+    fid: string;
+    platform?: 'android' | 'ios' | 'web';
+    appPackage?: string;
+    appType?: 'customer' | 'admin';
+    deviceModel?: string;
+    previousFid?: string | null;
+  }): Promise<{ installation: unknown; fcmStatus: { configured: boolean; projectId: string | null } }> {
+    return this.client.post('/notifications/fcm/register', input);
+  }
+
+  unregisterFcm(fid?: string, allDevices?: boolean): Promise<{ unregistered: boolean; removedCount: number }> {
+    return this.client.post('/notifications/fcm/unregister', { fid, allDevices });
+  }
+
+  getFcmInstallations(): Promise<{ installations: unknown[]; activeFid: string | null }> {
+    return this.client.get('/notifications/fcm/installations');
+  }
+
+  sendTestFcm(input?: { title?: string; body?: string; fid?: string }): Promise<{ push: unknown }> {
+    return this.client.post('/notifications/fcm/test', input ?? {});
+  }
+
   // ------------------------------------------------------------------- media
   private async uploadMultipartFile<T>(
     endpoint: string,
