@@ -156,14 +156,85 @@ export class ApiClient {
     this.token = token;
   }
 
+  getToken(): string | null {
+    return this.token;
+  }
+
   hasToken(): boolean {
     return this.token !== null;
   }
 
-  async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  getRoot(): string {
+    return this.root;
+  }
+
+  resolveUrl(path: string, query?: RequestOptions['query']): string {
     if (!this.root) {
       throw new ApiError('No API is configured. The app is running in local mode.', { code: 'network_error' });
     }
+    return `${this.root}${path}${buildQuery(query)}`;
+  }
+
+  async parseEnvelope<T>(
+    status: number,
+    body: string,
+    options: { requestId?: string; usedBearer?: boolean } = {},
+  ): Promise<T> {
+    let envelope: ApiEnvelope<T> | null = null;
+    if (body) {
+      try {
+        envelope = JSON.parse(body) as ApiEnvelope<T>;
+      } catch {
+        envelope = null;
+      }
+    }
+
+    const okStatus = status >= 200 && status < 300;
+    if (!okStatus || !envelope || envelope.ok !== true) {
+      const error = this.toError(status, envelope, options.requestId);
+      // A rejected *authenticated* token has to clear the session, otherwise the app
+      // keeps replaying it forever. Login/register failures are unauthenticated and
+      // must not tear the session down, even when a signed-in session is still held
+      // on the device.
+      if (error.status === 401 && options.usedBearer) {
+        // Clearing the session is best effort: a storage failure here must not
+        // replace the real 401 the caller needs to see.
+        try {
+          await notifyUnauthorized();
+        } catch {
+          /* keep the original error */
+        }
+      }
+      throw error;
+    }
+
+    if (envelope.data === undefined) {
+      throw new ApiError('The server returned an empty response.', {
+        status,
+        code: 'malformed_response',
+        requestId: options.requestId,
+      });
+    }
+    return envelope.data;
+  }
+
+  toUploadError(caught: unknown): ApiError {
+    if (caught instanceof ApiError) return caught;
+    if (isConnectivityFailure(caught)) {
+      return new ApiError(
+        `Could not reach the Vanta API at ${runtimeConfig.apiBaseUrl}. Check that the server is running.`,
+        { code: 'network_error' },
+      );
+    }
+    const detail = caught instanceof Error && caught.message ? caught.message : undefined;
+    return new ApiError(
+      detail ? `The upload could not be sent: ${detail}` : 'The upload could not be sent.',
+      { code: 'request_failed' },
+    );
+  }
+
+  async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    const url = this.resolveUrl(path, options.query);
 
     const controller = new AbortController();
     const timeoutMs = options.timeoutMs ?? runtimeConfig.requestTimeoutMs;
@@ -182,7 +253,7 @@ export class ApiClient {
     let response: Response;
     let body: string;
     try {
-      response = await fetch(`${this.root}${path}${buildQuery(options.query)}`, {
+      response = await fetch(url, {
         method: options.method ?? 'GET',
         headers,
         body:
@@ -203,41 +274,7 @@ export class ApiClient {
     }
 
     const requestId = response.headers.get('x-request-id') ?? undefined;
-    let envelope: ApiEnvelope<T> | null = null;
-    if (body) {
-      try {
-        envelope = JSON.parse(body) as ApiEnvelope<T>;
-      } catch {
-        envelope = null;
-      }
-    }
-
-    if (!response.ok || !envelope || envelope.ok !== true) {
-      const error = this.toError(response.status, envelope, requestId);
-      // A rejected *authenticated* token has to clear the session, otherwise the app
-      // keeps replaying it forever. Login/register failures are unauthenticated and
-      // must not tear the session down, even when a signed-in session is still held
-      // on the device.
-      if (error.status === 401 && usedBearer) {
-        // Clearing the session is best effort: a storage failure here must not
-        // replace the real 401 the caller needs to see.
-        try {
-          await notifyUnauthorized();
-        } catch {
-          /* keep the original error */
-        }
-      }
-      throw error;
-    }
-
-    if (envelope.data === undefined) {
-      throw new ApiError('The server returned an empty response.', {
-        status: response.status,
-        code: 'malformed_response',
-        requestId,
-      });
-    }
-    return envelope.data;
+    return this.parseEnvelope<T>(response.status, body, { requestId, usedBearer });
   }
 
   /**

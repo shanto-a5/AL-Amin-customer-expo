@@ -13,7 +13,7 @@ import { baseFontFamily, colors } from '@/theme/tokens';
 
 const ICON_SIZE = 19;
 const MIN_TOUCH_TARGET = 46;
-const IDLE_COLOR = '#8494AA';
+const IDLE_COLOR = '#A0A0A0';
 
 const ICON_WEIGHT = { ios: 'medium' as const, android: mediumWeight };
 
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingTop: 8,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(13, 21, 36, 0.95)',
+    backgroundColor: '#000000',
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   itemActive: {
-    backgroundColor: 'rgba(34, 199, 182, 0.09)',
+    backgroundColor: 'rgba(255, 147, 62, 0.12)',
   },
   itemPressed: {
     opacity: 0.78,

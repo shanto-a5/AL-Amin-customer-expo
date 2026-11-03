@@ -1,6 +1,7 @@
 /**
  * Typed API surface for AllPay BD (অল পে বিডি).
  */
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
 import { ApiError, getApiClient } from './api-client';
@@ -115,37 +116,16 @@ export interface HealthReport {
   uptimeSeconds: number;
 }
 
-async function buildImageFormData(
-  uri: string,
-  fieldName: 'avatar' | 'file' = 'avatar',
-): Promise<FormData> {
-  if (!uri || typeof uri !== 'string') {
-    throw new ApiError('The selected photo is no longer available on this device. Pick it again.', {
-      code: 'validation_failed',
-    });
+function findHeaderCaseInsensitive(
+  headers: Record<string, string> | undefined,
+  name: string,
+): string | undefined {
+  if (!headers) return undefined;
+  const target = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === target) return value;
   }
-
-  const extension = normaliseImageExtension(uri);
-  const filename = withImageExtension(`${fieldName}-${Date.now()}${extension}`, extension);
-  const mimeType = MIME_BY_EXTENSION[extension] ?? 'image/jpeg';
-  const form = new FormData();
-
-  if (Platform.OS === 'web') {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const resolvedMime = blob.type || mimeType;
-    form.append(fieldName, new Blob([blob], { type: resolvedMime }), filename);
-    return form;
-  }
-
-  // Standard React Native FormData file payload: { uri, type, name }
-  form.append(fieldName, {
-    uri,
-    type: mimeType,
-    name: filename,
-  } as unknown as Blob);
-
-  return form;
+  return undefined;
 }
 
 export class VantaApi {
@@ -350,11 +330,75 @@ export class VantaApi {
   }
 
   // ------------------------------------------------------------------- media
+  private async uploadMultipartFile<T>(
+    endpoint: string,
+    fileUri: string,
+    options: {
+      httpMethod: 'PATCH' | 'POST';
+      fieldName: 'avatar' | 'file';
+      authenticated?: boolean;
+    },
+  ): Promise<T> {
+    if (!fileUri || typeof fileUri !== 'string') {
+      throw new ApiError('The selected photo is no longer available on this device. Pick it again.', {
+        code: 'validation_failed',
+      });
+    }
+
+    const extension = normaliseImageExtension(fileUri);
+    const mimeType = MIME_BY_EXTENSION[extension] ?? 'image/jpeg';
+
+    if (Platform.OS === 'web') {
+      const filename = withImageExtension(`${options.fieldName}-${Date.now()}${extension}`, extension);
+      const response = await fetch(fileUri);
+      const blob = await response.blob();
+      const resolvedMime = blob.type || mimeType;
+      const form = new FormData();
+      form.append(options.fieldName, new Blob([blob], { type: resolvedMime }), filename);
+      return this.client.request<T>(endpoint, {
+        method: options.httpMethod,
+        form,
+        authenticated: options.authenticated,
+        timeoutMs: MEDIA_UPLOAD_TIMEOUT_MS,
+      });
+    }
+
+    const endpointUrl = this.client.resolveUrl(endpoint);
+    const token = this.client.getToken();
+    const usedBearer = options.authenticated !== false && token !== null;
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      ...(usedBearer ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
+    let uploadResult: FileSystem.FileSystemUploadResult;
+    try {
+      uploadResult = await FileSystem.uploadAsync(endpointUrl, fileUri, {
+        httpMethod: options.httpMethod,
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: options.fieldName,
+        mimeType,
+        headers,
+      });
+    } catch (caught) {
+      throw this.client.toUploadError(caught);
+    }
+
+    const requestId = findHeaderCaseInsensitive(uploadResult.headers, 'x-request-id');
+    return this.client.parseEnvelope<T>(uploadResult.status, uploadResult.body, {
+      requestId,
+      usedBearer,
+    });
+  }
+
   async uploadMedia(uri: string): Promise<{
     media: { url: string; publicId: string; format: string; resourceType: string };
   }> {
-    const form = await buildImageFormData(uri, 'file');
-    return this.client.upload('/media', form, { timeoutMs: MEDIA_UPLOAD_TIMEOUT_MS });
+    return this.uploadMultipartFile('/media', uri, {
+      httpMethod: 'POST',
+      fieldName: 'file',
+      authenticated: true,
+    });
   }
 
   async uploadAvatar(
@@ -365,11 +409,14 @@ export class VantaApi {
     avatarUrl: string;
     media: { url: string; publicId: string; format: string; resourceType: string } | null;
   }> {
-    const form = await buildImageFormData(uri, 'avatar');
-    const endpoint = options.authenticated ? '/user/avatar' : '/upload/avatar';
-    return this.client.upload(endpoint, form, {
-      authenticated: options.authenticated ?? false,
-      timeoutMs: MEDIA_UPLOAD_TIMEOUT_MS,
+    const isAuthenticated = options.authenticated ?? this.client.hasToken();
+    const endpoint = isAuthenticated ? '/user/avatar' : '/upload/avatar';
+    const httpMethod = isAuthenticated ? 'PATCH' : 'POST';
+
+    return this.uploadMultipartFile(endpoint, uri, {
+      httpMethod,
+      fieldName: 'avatar',
+      authenticated: isAuthenticated,
     });
   }
 }

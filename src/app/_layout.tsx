@@ -68,11 +68,11 @@ export default function RootLayout(): React.JSX.Element {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#070C17',
+    backgroundColor: '#000000',
   },
   outerBackdrop: {
     flex: 1,
-    backgroundColor: '#070C17',
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },

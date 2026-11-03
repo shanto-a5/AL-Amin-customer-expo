@@ -50,7 +50,7 @@ export function AppHeader({
         }
         style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
       >
-        <AppIcon name="bell" size={20} color="#D8E3EF" />
+        <AppIcon name="bell" size={20} color="#FFFFFF" />
         {unreadCount > 0 ? <View style={styles.notificationDot} /> : null}
       </Pressable>
     </View>
@@ -289,12 +289,12 @@ export function OperatorTile({
 function categoryTagPalette(category: OfferCategory): { bg: string; fg: string; label: string } {
   switch (category) {
     case 'INTERNET':
-      return { bg: 'rgba(53, 201, 148, 0.12)', fg: '#45D7AA', label: 'Internet' };
+      return { bg: 'rgba(255, 147, 62, 0.15)', fg: colors.primary, label: 'Internet' };
     case 'MINUTES':
-      return { bg: 'rgba(255, 183, 77, 0.12)', fg: '#FFC36A', label: 'Minutes' };
+      return { bg: 'rgba(255, 255, 255, 0.12)', fg: '#FFFFFF', label: 'Minutes' };
     case 'COMBO':
     default:
-      return { bg: 'rgba(34, 199, 182, 0.12)', fg: colors.primary, label: 'Combo' };
+      return { bg: 'rgba(255, 147, 62, 0.15)', fg: colors.primary, label: 'Combo' };
   }
 }
 
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.walletBorder,
-    backgroundColor: colors.walletSurface,
+    backgroundColor: '#000000',
     marginBottom: 4,
   },
   balanceRingOuter: {
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     right: -88,
     top: -108,
     borderWidth: 1,
-    borderColor: 'rgba(96, 227, 210, 0.11)',
+    borderColor: 'rgba(255, 255, 255, 0.10)',
   },
   balanceRingInner: {
     position: 'absolute',
@@ -565,7 +565,7 @@ const styles = StyleSheet.create({
     right: -111,
     top: -131,
     borderWidth: 1,
-    borderColor: 'rgba(96, 227, 210, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   balanceTop: {
     flexDirection: 'row',
@@ -578,11 +578,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '500',
-    color: '#BFD1DF',
+    color: '#D0D0D0',
     flexShrink: 1,
   },
   balanceLabelBn: {
-    color: '#9EB4C5',
+    color: '#A0A0A0',
   },
   visibilityBtn: {
     flexDirection: 'row',
@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 15,
     fontWeight: '600',
-    color: '#B5C6D4',
+    color: '#D0D0D0',
   },
   balanceAmountWrap: {
     marginTop: 12,
@@ -621,14 +621,14 @@ const styles = StyleSheet.create({
   balanceCurrency: {
     fontSize: 22,
     fontWeight: '600',
-    color: '#D6E7EC',
+    color: '#FFFFFF',
   },
   balanceCaption: {
     fontFamily: baseFontFamily,
     marginTop: 5,
     fontSize: 11.5,
     lineHeight: 15,
-    color: '#9EB4C5',
+    color: '#A0A0A0',
   },
   balanceBottom: {
     flexDirection: 'row',
@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
     fontFamily: baseFontFamily,
     fontSize: 11,
     lineHeight: 15,
-    color: '#A9BDCC',
+    color: '#A0A0A0',
   },
   accountRefValue: {
     fontFamily: baseFontFamily,
@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     fontWeight: '700',
     letterSpacing: 0.4,
-    color: '#E5F0F5',
+    color: '#FFFFFF',
     marginTop: 2,
   },
   addMoneyButton: {
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 17,
     fontWeight: '700',
-    color: colors.textInverse,
+    color: '#000000',
   },
 
   operatorTile: {
@@ -699,8 +699,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   operatorTilePressed: {
-    backgroundColor: '#142238',
-    borderColor: colors.primaryBorder,
+    backgroundColor: '#000000',
+    borderColor: colors.primary,
   },
   operatorSymbol: {
     width: 38,
@@ -752,12 +752,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   offerRowSelected: {
-    backgroundColor: 'rgba(34, 199, 182, 0.08)',
-    borderColor: colors.primaryBorder,
+    backgroundColor: 'rgba(255, 147, 62, 0.12)',
+    borderColor: colors.primary,
   },
   offerRowPressed: {
-    borderColor: colors.primaryBorder,
-    backgroundColor: '#142238',
+    borderColor: colors.primary,
+    backgroundColor: '#000000',
   },
   offerLeft: {
     flex: 1,
@@ -832,8 +832,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   notifCardUnread: {
-    borderColor: colors.primaryBorder,
-    backgroundColor: '#132036',
+    borderColor: colors.primary,
+    backgroundColor: '#000000',
   },
   notifMain: {
     padding: 15,

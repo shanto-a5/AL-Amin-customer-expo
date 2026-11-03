@@ -1,45 +1,45 @@
 import { Platform, StyleSheet, TextStyle, ViewStyle } from 'react-native';
 
 /**
- * AllPay BD (অল পে বিডি) Fintech Design System Tokens
- * Grounded in the minimalist dark slate & teal visual benchmark.
+ * AllPay BD (অল পে বিডি) Stark High-Contrast Fintech Design System Tokens
+ * Strict Solid Black (#000000), Solid White (#FFFFFF), and Brand Orange Accent (#FF933E).
  */
 export const colors = {
-  background: '#0B1120',
-  surface: '#111B2D',
-  surfaceSecondary: '#172338',
-  surfaceMuted: '#172338',
-  surfaceElevated: '#1C2A40',
+  background: '#000000',
+  surface: '#000000',
+  surfaceSecondary: '#000000',
+  surfaceMuted: '#000000',
+  surfaceElevated: '#000000',
 
-  walletSurface: '#13263B',
-  walletBorder: 'rgba(74, 211, 196, 0.24)',
-  walletDivider: 'rgba(205, 232, 239, 0.12)',
+  walletSurface: '#000000',
+  walletBorder: 'rgba(255, 255, 255, 0.24)',
+  walletDivider: 'rgba(255, 255, 255, 0.20)',
 
-  border: 'rgba(157, 178, 205, 0.13)',
-  borderStrong: 'rgba(157, 178, 205, 0.22)',
-  divider: 'rgba(157, 178, 205, 0.10)',
+  border: 'rgba(255, 255, 255, 0.20)',
+  borderStrong: 'rgba(255, 255, 255, 0.35)',
+  divider: 'rgba(255, 255, 255, 0.20)',
 
-  text: '#F4F7FB',
-  textSecondary: '#9AAAC0',
-  textMuted: '#9AAAC0',
-  textFaint: '#72839B',
-  textInverse: '#052B2C',
+  text: '#FFFFFF',
+  textSecondary: '#D0D0D0',
+  textMuted: '#A0A0A0',
+  textFaint: '#7A7A7A',
+  textInverse: '#000000',
 
-  primary: '#22C7B6',
-  primaryDark: '#12B6A6',
-  primarySoft: 'rgba(34, 199, 182, 0.12)',
-  primaryBorder: 'rgba(34, 199, 182, 0.36)',
-  accent: '#22C7B6',
+  primary: '#FF933E',
+  primaryDark: '#E07D2C',
+  primarySoft: 'rgba(255, 147, 62, 0.15)',
+  primaryBorder: '#FF933E',
+  accent: '#FF933E',
 
   success: '#35C994',
-  successSoft: 'rgba(53, 201, 148, 0.12)',
-  warning: '#EAB354',
-  warningSoft: 'rgba(234, 179, 84, 0.12)',
+  successSoft: 'rgba(53, 201, 148, 0.15)',
+  warning: '#FF933E',
+  warningSoft: 'rgba(255, 147, 62, 0.15)',
   danger: '#F06A7E',
-  dangerSoft: 'rgba(240, 106, 126, 0.12)',
+  dangerSoft: 'rgba(240, 106, 126, 0.15)',
 
-  notificationDot: '#FF647D',
-  overlay: 'rgba(6, 10, 20, 0.78)',
+  notificationDot: '#FF933E',
+  overlay: 'rgba(0, 0, 0, 0.88)',
 } as const;
 
 export const baseFontFamily = Platform.select({

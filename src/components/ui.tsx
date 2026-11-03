@@ -144,11 +144,11 @@ const BTN_PRESSED_BG: Record<Variant, string> = {
 };
 
 const BTN_FG: Record<Variant, string> = {
-  primary: colors.textInverse,
-  secondary: colors.text,
+  primary: '#000000',
+  secondary: '#FFFFFF',
   ghost: colors.primary,
   danger: '#FF8596',
-  accent: colors.textInverse,
+  accent: '#000000',
 };
 
 export interface ButtonProps {
@@ -969,7 +969,7 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 17,
     fontWeight: '600',
-    color: '#DCE6F2',
+    color: '#FFFFFF',
     marginBottom: 6,
   },
   inputWrap: {
@@ -978,12 +978,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderStrong,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceSecondary,
+    backgroundColor: '#000000',
     minHeight: 46,
   },
   inputWrapFocused: {
     borderColor: colors.primary,
-    backgroundColor: '#152236',
+    backgroundColor: '#000000',
   },
   inputWrapError: {
     borderColor: colors.danger,
@@ -994,7 +994,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     fontSize: 14.5,
-    color: colors.text,
+    color: '#FFFFFF',
   },
   inputAccessory: {
     paddingRight: 10,
@@ -1078,9 +1078,9 @@ const styles = StyleSheet.create({
   },
   brandMark: {
     overflow: 'hidden',
-    backgroundColor: '#EAFBF8',
+    backgroundColor: '#000000',
     borderWidth: 1,
-    borderColor: 'rgba(34, 199, 182, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.20)',
     ...makeShadow(1),
   },
   brandCopy: { flexShrink: 1, minWidth: 0 },
