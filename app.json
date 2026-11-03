@@ -19,7 +19,10 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.allpaybd.app",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "output": "static",
@@ -41,7 +44,8 @@
         {
           "installationIdEnabled": true
         }
-      ]
+      ],
+      "./plugins/withNotificationChannel"
     ],
     "experiments": {
       "typedRoutes": true,
