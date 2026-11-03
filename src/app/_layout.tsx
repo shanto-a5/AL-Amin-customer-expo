@@ -5,14 +5,26 @@ import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-nativ
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 
-import { SessionProvider } from '@/modules/session/session-context';
-import { useBootGate } from '@/infrastructure/bootstrap';
-import { Button, Card } from '@/components/ui';
 import { GlobalProgressLine } from '@/components/global-progress-line';
-import { spacing, colors, type } from '@/theme/tokens';
+import { Button, Card } from '@/components/ui';
+import { useBootGate } from '@/infrastructure/bootstrap';
+import { SessionProvider } from '@/modules/session/session-context';
+import { colors, spacing, type } from '@/theme/tokens';
 
 export default function RootLayout(): React.JSX.Element {
   const boot = useBootGate();
+
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const id = 'allpay-bd-web-fonts';
+    if (document.getElementById(id)) return;
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href =
+      'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap';
+    document.head.appendChild(link);
+  }, []);
 
   return (
     <GestureHandlerRootView style={styles.root}>
@@ -35,8 +47,12 @@ export default function RootLayout(): React.JSX.Element {
               {boot.status === 'failed' ? (
                 <View style={styles.centered}>
                   <Card style={{ width: '100%', maxWidth: 400 }}>
-                    <Text style={{ ...type.h3, marginBottom: spacing.sm }}>Application could not start</Text>
-                    <Text style={{ ...type.bodyMuted, marginBottom: spacing.lg }}>{boot.error.message}</Text>
+                    <Text style={{ ...type.h3, marginBottom: spacing.sm }}>
+                      Application could not start
+                    </Text>
+                    <Text style={{ ...type.bodyMuted, marginBottom: spacing.lg }}>
+                      {boot.error.message}
+                    </Text>
                     <Button title="Try again" fullWidth onPress={boot.retry} />
                   </Card>
                 </View>
@@ -52,11 +68,11 @@ export default function RootLayout(): React.JSX.Element {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#070C17',
   },
   outerBackdrop: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#070C17',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -16,18 +16,23 @@ import {
   type InitiateAddMoneyResult,
   type VerifyAddMoneyOtpResult,
 } from '@/api/vanta-api';
-import { BackButton } from '@/components/back-button';
+import { PageHeader, WalletMiniPill } from '@/components/fintech-ui';
 import {
-  Button,
+  AppIcon,
   Card,
+  FormField,
   NoticeCard,
+  PrimaryButton,
   Screen,
+  SecondaryButton,
   SectionHeader,
+  StatusIndicator,
   SummaryRow,
 } from '@/components/ui';
 import { withSession, type ProtectedRoute } from '@/modules/session/route-guard';
 import type { SessionContextValue } from '@/modules/session/session-context';
 import {
+  baseFontFamily,
   colors,
   formatBdt,
   GATEWAYS,
@@ -40,7 +45,7 @@ import {
 
 const QUICK_ADD_AMOUNTS = [500, 1000, 2000, 5000];
 const PROCESSING_NOTICE =
-  'Wait please 10 minutes! আপনার অ্যাড মানি প্রসেসিং হচ্ছে। ১০ মিনিটের মধ্যে মূল অ্যাকাউন্টে ব্যালেন্স যোগ হয়ে যাবে।';
+  'আপনার অ্যাড মানি প্রসেসিং হচ্ছে। ১০ মিনিটের মধ্যে মূল অ্যাকাউন্টে ব্যালেন্স যোগ হয়ে যাবে।';
 
 function formatCountdown(targetIso: string | null, nowMs: number): string {
   if (!targetIso) return '10:00';
@@ -54,6 +59,7 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
   const [gatewayCode, setGatewayCode] = React.useState<GatewayCode>('BKASH');
   const [senderNumber, setSenderNumber] = React.useState(session.user?.phone ?? '');
   const [amountInput, setAmountInput] = React.useState('1000');
+  const [amountFocused, setAmountFocused] = React.useState(false);
 
   const [formError, setFormError] = React.useState<string | null>(null);
   const [initiating, setInitiating] = React.useState(false);
@@ -74,18 +80,19 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
   const activeGateway = GATEWAYS[gatewayCode];
   const numericAmount = Number.parseFloat(amountInput.replace(/[^\d.]/g, '')) || 0;
 
-  // Resend timer for OTP modal
   React.useEffect(() => {
     if (!otpSession) return;
-    setResendTimer(120);
     const timer = setInterval(() => {
       setResendTimer((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(timer);
   }, [otpSession]);
 
-  // Live 10-minute countdown timer
-  const pendingAddMoney = session.user?.pendingAddMoney ?? [];
+  const pendingAddMoney = React.useMemo(
+    () => session.user?.pendingAddMoney ?? [],
+    [session.user?.pendingAddMoney],
+  );
+
   React.useEffect(() => {
     if (!verifiedHold && pendingAddMoney.length === 0) return;
     const timer = setInterval(() => {
@@ -107,11 +114,11 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
 
     const cleanSender = senderNumber.trim();
     if (cleanSender.length < 6) {
-      setFormError('সঠিক প্রেরকের বিকাশ/নগদ মোবাইল নম্বর অথবা ব্যাংক অ্যাকাউন্ট নম্বর দিন।');
+      setFormError('সঠিক বিকাশ/নগদ মোবাইল নম্বর অথবা ব্যাংক অ্যাকাউন্ট নম্বর দিন।');
       return;
     }
     if (numericAmount < 50) {
-      setFormError('সর্বনিম্ন অ্যাড মানি পরিমাণ ৳৫০ হতে হবে • Minimum Add Money amount is ৳50.');
+      setFormError('সর্বনিম্ন অ্যাড মানি পরিমাণ ৳৫০ হতে হবে · Minimum Add Money amount is ৳50.');
       return;
     }
 
@@ -124,6 +131,7 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
       });
       setOtpInput(result.devOtp || '');
       setOtpError(null);
+      setResendTimer(120);
       setOtpSession(result);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Could not initiate Add Money.');
@@ -137,7 +145,7 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
     setOtpError(null);
     const cleanOtp = otpInput.trim();
     if (!/^\d{4}$/.test(cleanOtp)) {
-      setOtpError('৪ ডিজিটের ওটিপি কোড দিন • Enter the 4-digit OTP code.');
+      setOtpError('৪ ডিজিটের ওটিপি কোড দিন · Enter the 4-digit OTP code.');
       return;
     }
 
@@ -164,7 +172,7 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
       await session.refresh();
       setVerifiedHold(null);
       setCompletedBanner(
-        `✓ ${formatBdt(res.transaction.amount)} (${res.transaction.paymentGateway}) সফলভাবে আপনার মূল ব্যালেন্সে যোগ হয়েছে! নতুন ব্যালেন্স: ${formatBdt(res.user?.balance ?? session.user?.balance ?? 0, true)}`,
+        `${formatBdt(res.transaction.amount)} (${res.transaction.paymentGateway}) credited to your wallet. Available balance: ${formatBdt(res.user?.balance ?? session.user?.balance ?? 0, true)}`,
       );
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Could not complete transaction.');
@@ -175,23 +183,17 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
 
   return (
     <Screen padded>
-      <View style={styles.topRow}>
-        <BackButton fallbackHref="/home" />
-        <View style={styles.balanceBadge}>
-          <Text style={styles.balanceBadgeLabel}>বর্তমান ব্যালেন্স:</Text>
-          <Text style={styles.balanceBadgeValue}>{formatBdt(session.user?.balance ?? 0, true)}</Text>
-        </View>
-      </View>
-
-      <Text style={type.h1}>+ অ্যাড মানি • Add Money</Text>
-      <Text style={[type.caption, { marginTop: 2, marginBottom: spacing.md }]}>
-        বিকাশ, নগদ অথবা ব্যাংক অ্যাকাউন্ট থেকে আপনার অল পে বিডি ওয়ালেটে টাকা যোগ করুন
-      </Text>
+      <PageHeader
+        backFallbackHref="/home"
+        rightAccessory={<WalletMiniPill balance={session.user?.balance ?? 0} />}
+        title="Add Money"
+        subtitle="বিকাশ, নগদ অথবা ব্যাংক থেকে আপনার ওয়ালেটে টাকা যোগ করুন"
+      />
 
       {completedBanner ? (
         <NoticeCard
           tone="success"
-          title="অ্যাড মানি সফল হয়েছে • Balance Credited"
+          title="Balance credited"
           message={completedBanner}
           onDismiss={() => setCompletedBanner(null)}
         />
@@ -200,46 +202,47 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
       {formError ? (
         <NoticeCard
           tone="danger"
-          title="অনুগ্রহ করে যাচাই করুন"
+          title="Check deposit details"
           message={formError}
           onDismiss={() => setFormError(null)}
         />
       ) : null}
 
-      {/* Persistent Banner for any active PROCESSING Add Money transactions */}
+      {/* Active Processing Add Money Banner(s) */}
       {pendingAddMoney.map((trx) => (
         <View key={trx.trxId} style={styles.holdBanner}>
-          <Text style={styles.holdWarningTitle}>
-            ⚠️ {PROCESSING_NOTICE}
-          </Text>
-          <View style={styles.holdMetaRow}>
-            <View>
-              <Text style={styles.holdMetaText}>
-                গেটওয়ে: {trx.paymentGateway} • পরিমাণ: {formatBdt(trx.amount)}
-              </Text>
-              <Text style={styles.holdMetaText}>TrxID: {trx.trxId}</Text>
-            </View>
-            <View style={styles.holdCountdownBox}>
-              <Text style={styles.holdCountdownLabel}>Countdown</Text>
+          <View style={styles.holdTopRow}>
+            <StatusIndicator status="PROCESSING" label="Settlement hold" />
+            <View style={styles.holdCountdownBadge}>
               <Text style={styles.holdCountdownValue}>
                 {formatCountdown(trx.scheduledReleaseAt, nowMs)}
               </Text>
             </View>
           </View>
-          <Button
-            title="⚡ Simulate Instant Complete (Dev/Admin)"
-            onPress={() => handleCompleteNow(trx.trxId)}
-            loading={completingNow}
-            fullWidth
-            style={{ marginTop: spacing.sm }}
-          />
+          <Text style={styles.holdNoticeText}>{PROCESSING_NOTICE}</Text>
+          <View style={styles.holdFooter}>
+            <Text style={styles.holdMetaText}>
+              {trx.paymentGateway} · {formatBdt(trx.amount)} · {trx.trxId}
+            </Text>
+            <Pressable
+              onPress={() => handleCompleteNow(trx.trxId)}
+              disabled={completingNow}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Simulate instant settlement"
+            >
+              <Text style={styles.holdActionLink}>
+                {completingNow ? 'Completing...' : 'Complete now →'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       ))}
 
-      {/* Step 1A: Gateway Selector Cards */}
+      {/* Step 1A: Payment Method Selection */}
       <SectionHeader
-        title="১. পেমেন্ট গেটওয়ে নির্বাচন করুন • Select Gateway"
-        caption="Choose bKash, Nagad, or Bank Account"
+        title="Payment source"
+        caption="গেটওয়ে নির্বাচন করুন"
       />
       <View style={styles.gatewayRow}>
         {GATEWAY_LIST.map((gw) => {
@@ -248,48 +251,50 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
             <Pressable
               key={gw.code}
               onPress={() => setGatewayCode(gw.code)}
-              accessibilityRole="button"
+              accessibilityRole="radio"
+              accessibilityState={{ checked: selected }}
               accessibilityLabel={`${gw.name} (${gw.bnName})`}
-              style={[
-                styles.gatewayCard,
-                {
-                  borderColor: selected ? gw.color : colors.border,
-                  backgroundColor: selected ? gw.softBg : colors.surface,
-                },
+              style={({ pressed }) => [
+                styles.gatewayTile,
+                selected && styles.gatewayTileSelected,
+                pressed && { opacity: 0.84 },
               ]}
             >
-              <View style={[styles.gatewayDot, { backgroundColor: gw.color }]} />
-              <Text style={styles.gatewayName}>{gw.name}</Text>
-              <Text style={[styles.gatewayBn, { color: gw.color }]}>{gw.bnName}</Text>
+              <View style={[styles.gatewayBadge, { backgroundColor: gw.softBg }]}>
+                <Text style={[styles.gatewayBadgeText, { color: gw.color }]}>
+                  {gw.shortLabel}
+                </Text>
+              </View>
+              <Text numberOfLines={1} style={styles.gatewayName}>
+                {gw.name}
+              </Text>
+              <Text numberOfLines={1} style={styles.gatewayBn}>
+                {gw.bnName}
+              </Text>
             </Pressable>
           );
         })}
       </View>
 
       {/* Step 1B: Sender Number & Amount Form */}
-      <Card style={{ ...styles.formCard, borderColor: activeGateway.color }}>
-        <View style={styles.selectedGatewayHeader}>
-          <View style={[styles.gatewayPill, { backgroundColor: activeGateway.color }]}>
-            <Text style={styles.gatewayPillText}>{activeGateway.name}</Text>
-          </View>
-          <Text style={styles.selectedGatewaySub}>{activeGateway.subtitle}</Text>
+      <Card style={styles.formCard}>
+        <View style={styles.selectedMethodBar}>
+          <View style={[styles.methodDot, { backgroundColor: activeGateway.color }]} />
+          <Text style={styles.selectedMethodTitle}>{activeGateway.name}</Text>
+          <Text numberOfLines={1} style={styles.selectedMethodSub}>
+            · {activeGateway.subtitle}
+          </Text>
         </View>
 
-        <Text style={styles.inputLabel}>
-          প্রেরকের নম্বর / অ্যাকাউন্ট • Sender {activeGateway.name} Number
-        </Text>
-        <TextInput
+        <FormField
+          label={`Sender ${activeGateway.name} number · প্রেরকের নম্বর`}
+          placeholder={activeGateway.placeholder}
+          keyboardType="phone-pad"
           value={senderNumber}
           onChangeText={setSenderNumber}
-          placeholder={activeGateway.placeholder}
-          placeholderTextColor={colors.textFaint}
-          keyboardType="phone-pad"
-          style={styles.textInput}
         />
 
-        <Text style={[styles.inputLabel, { marginTop: spacing.md }]}>
-          টাকার পরিমাণ • Amount (সর্বনিম্ন ৳৫০)
-        </Text>
+        <Text style={styles.inputLabel}>Amount · টাকার পরিমাণ (minimum ৳50)</Text>
         <View style={styles.quickAmountRow}>
           {QUICK_ADD_AMOUNTS.map((amt) => {
             const active = Number(amountInput) === amt;
@@ -297,12 +302,11 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
               <Pressable
                 key={amt}
                 onPress={() => setAmountInput(String(amt))}
-                style={[
-                  styles.quickChip,
-                  active && { backgroundColor: activeGateway.color, borderColor: activeGateway.color },
-                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                style={[styles.quickChip, active && styles.quickChipActive]}
               >
-                <Text style={[styles.quickChipText, active && { color: '#FFFFFF', fontWeight: '900' }]}>
+                <Text style={[styles.quickChipText, active && styles.quickChipTextActive]}>
                   {formatBdt(amt)}
                 </Text>
               </Pressable>
@@ -310,22 +314,27 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
           })}
         </View>
 
-        <TextInput
-          value={amountInput}
-          onChangeText={(v) => setAmountInput(v.replace(/\D/g, '').slice(0, 6))}
-          placeholder="৳ পরিমাণ লিখুন (সর্বনিম্ন ৫০)"
-          placeholderTextColor={colors.textFaint}
-          keyboardType="number-pad"
-          style={styles.amountInput}
-        />
+        <View style={[styles.amountInputBox, amountFocused && styles.amountInputBoxFocused]}>
+          <Text style={styles.amountCurrency}>৳</Text>
+          <TextInput
+            value={amountInput}
+            onChangeText={(v) => setAmountInput(v.replace(/\D/g, '').slice(0, 6))}
+            onFocus={() => setAmountFocused(true)}
+            onBlur={() => setAmountFocused(false)}
+            placeholder="500"
+            placeholderTextColor={colors.textFaint}
+            keyboardType="number-pad"
+            accessibilityLabel="Add Money amount in Taka"
+            style={styles.amountInput}
+          />
+        </View>
 
-        <View style={{ height: spacing.md }} />
-        <Button
-          title={`ওটিপি ভেরিফাই করুন • Proceed (${formatBdt(numericAmount)})`}
+        <View style={{ height: spacing.lg }} />
+        <PrimaryButton
+          title={`Continue · ${formatBdt(numericAmount)}`}
           onPress={handleInitiate}
           loading={initiating}
           fullWidth
-          style={{ backgroundColor: activeGateway.color }}
         />
       </Card>
 
@@ -333,70 +342,92 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
       <Modal
         visible={Boolean(otpSession)}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setOtpSession(null)}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <View style={styles.modalBackdrop}>
             <View style={styles.modalCard}>
-            <Text style={type.h2}>📲 ৪-ডিজিট ওটিপি ভেরিফিকেশন</Text>
-            <Text style={[type.caption, { marginTop: 4, marginBottom: spacing.md }]}>
-              আপনার {activeGateway.bnName} ({otpSession?.senderNumber}) নম্বরে পাঠানো ৪-ডিজিট ওটিপি কোডটি লিখুন
-            </Text>
+              <View style={styles.modalHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={type.h2}>Verify OTP</Text>
+                  <Text style={[type.caption, { marginTop: 2 }]}>
+                    {activeGateway.bnName} ({otpSession?.senderNumber}) নম্বরে পাঠানো ৪-ডিজিট ওটিপি লিখুন
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setOtpSession(null)}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close OTP verification"
+                >
+                  <AppIcon name="close" size={18} color={colors.textMuted} />
+                </Pressable>
+              </View>
 
-            {otpSession?.devOtp ? (
-              <Pressable
-                onPress={() => setOtpInput(otpSession.devOtp ?? '1234')}
-                style={styles.devOtpToast}
-              >
-                <Text style={styles.devOtpToastText}>
-                  🧪 টেস্ট প্রিভিউ ওটিপি (Dev OTP): {otpSession.devOtp} (ট্যাপ করে বসান)
-                </Text>
-              </Pressable>
-            ) : null}
+              {otpSession?.devOtp ? (
+                <Pressable
+                  onPress={() => setOtpInput(otpSession.devOtp ?? '1234')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use preview OTP ${otpSession.devOtp}`}
+                  style={styles.devOtpBar}
+                >
+                  <Text style={styles.devOtpText}>
+                    Preview OTP: {otpSession.devOtp} (tap to fill)
+                  </Text>
+                </Pressable>
+              ) : null}
 
-            <View style={styles.summaryBox}>
-              <SummaryRow label="পেমেন্ট গেটওয়ে (Gateway)" value={`${activeGateway.name} (${activeGateway.bnName})`} />
-              <SummaryRow label="প্রেরক নম্বর (Sender)" value={otpSession?.senderNumber ?? ''} />
-              <SummaryRow label="পরিমাণ (Amount)" value={formatBdt(otpSession?.amount ?? 0)} tone="strong" />
-            </View>
+              <View style={styles.summaryBox}>
+                <SummaryRow
+                  label="Payment source"
+                  value={`${activeGateway.name} (${activeGateway.bnName})`}
+                  showDivider
+                />
+                <SummaryRow label="Sender" value={otpSession?.senderNumber ?? ''} showDivider />
+                <SummaryRow
+                  label="Amount"
+                  value={formatBdt(otpSession?.amount ?? 0)}
+                  tone="strong"
+                />
+              </View>
 
-            {otpError ? (
-              <NoticeCard tone="danger" title="OTP Error" message={otpError} />
-            ) : null}
+              {otpError ? (
+                <NoticeCard tone="danger" title="OTP verification failed" message={otpError} />
+              ) : null}
 
-            <TextInput
-              value={otpInput}
-              onChangeText={(v) => setOtpInput(v.replace(/\D/g, '').slice(0, 4))}
-              placeholder="• • • •"
-              placeholderTextColor={colors.textFaint}
-              keyboardType="number-pad"
-              maxLength={4}
-              style={[styles.otpInput, { borderColor: activeGateway.color }]}
-            />
-
-            <Text style={styles.resendTimerText}>
-              {resendTimer > 0
-                ? `পুনরায় ওটিপি পাঠান: ${resendTimer} সেকেন্ড পর`
-                : 'ওটিপি পাননি? পুনরায় চেষ্টা করতে পারেন'}
-            </Text>
-
-            <View style={styles.modalActions}>
-              <Button
-                title="বাতিল • Cancel"
-                variant="secondary"
-                onPress={() => setOtpSession(null)}
-                style={{ flex: 1 }}
+              <TextInput
+                value={otpInput}
+                onChangeText={(v) => setOtpInput(v.replace(/\D/g, '').slice(0, 4))}
+                placeholder="••••"
+                placeholderTextColor={colors.textFaint}
+                keyboardType="number-pad"
+                maxLength={4}
+                accessibilityLabel="4-digit OTP code"
+                style={styles.otpInput}
               />
-              <Button
-                title="ভেরিফাই করুন • Verify OTP"
-                onPress={handleVerifyOtp}
-                loading={verifyingOtp}
-                style={{ flex: 1, backgroundColor: activeGateway.color }}
-              />
+
+              <Text style={styles.resendTimerText}>
+                {resendTimer > 0
+                  ? `Code expires in ${resendTimer}s`
+                  : 'Need a new code? Cancel and request again.'}
+              </Text>
+
+              <View style={styles.modalActions}>
+                <SecondaryButton
+                  title="Cancel"
+                  onPress={() => setOtpSession(null)}
+                  style={{ flex: 1 }}
+                />
+                <PrimaryButton
+                  title="Verify OTP"
+                  onPress={handleVerifyOtp}
+                  loading={verifyingOtp}
+                  style={{ flex: 1 }}
+                />
+              </View>
             </View>
           </View>
-        </View>
         </TouchableWithoutFeedback>
       </Modal>
 
@@ -408,25 +439,34 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
         onRequestClose={() => setVerifiedHold(null)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { borderColor: '#F59E0B' }]}>
+          <View style={styles.modalCard}>
             <View style={styles.holdIconCircle}>
-              <Text style={{ fontSize: 28 }}>⏳</Text>
+              <AppIcon name="clock" size={22} color={colors.warning} />
             </View>
-            <Text style={styles.holdModalHeading}>অ্যাড মানি প্রসেসিং হচ্ছে!</Text>
-
-            <View style={styles.exactWarningBox}>
-              <Text style={styles.exactWarningText}>
-                ⚠️ &quot;{PROCESSING_NOTICE}&quot;
-              </Text>
-            </View>
+            <Text style={styles.holdModalHeading}>Add Money processing</Text>
+            <Text style={styles.holdModalSub}>{PROCESSING_NOTICE}</Text>
 
             {verifiedHold ? (
               <View style={styles.summaryBox}>
-                <SummaryRow label="TrxID" value={verifiedHold.transaction.trxId} tone="strong" />
-                <SummaryRow label="গেটওয়ে (Gateway)" value={verifiedHold.transaction.paymentGateway} />
-                <SummaryRow label="পরিমাণ (Amount)" value={formatBdt(verifiedHold.transaction.amount)} tone="strong" />
                 <SummaryRow
-                  label="সম্ভাব্য সময় (Countdown)"
+                  label="Reference"
+                  value={verifiedHold.transaction.trxId}
+                  tone="strong"
+                  showDivider
+                />
+                <SummaryRow
+                  label="Source"
+                  value={verifiedHold.transaction.paymentGateway}
+                  showDivider
+                />
+                <SummaryRow
+                  label="Amount"
+                  value={formatBdt(verifiedHold.transaction.amount)}
+                  tone="strong"
+                  showDivider
+                />
+                <SummaryRow
+                  label="Estimated release"
                   value={formatCountdown(verifiedHold.scheduledReleaseAt, nowMs)}
                   tone="discount"
                 />
@@ -434,17 +474,16 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
             ) : null}
 
             {verifiedHold ? (
-              <Button
-                title="⚡ Simulate Instant Complete (Dev/Admin)"
+              <PrimaryButton
+                title="Simulate instant settlement"
                 onPress={() => handleCompleteNow(verifiedHold.transaction.trxId)}
                 loading={completingNow}
                 fullWidth
               />
             ) : null}
             <View style={{ height: spacing.sm }} />
-            <Button
-              title="ড্যাশবোর্ডে ফিরুন • Back to Home"
-              variant="secondary"
+            <SecondaryButton
+              title="Back to Home"
               onPress={() => {
                 setVerifiedHold(null);
                 router.replace('/home');
@@ -459,176 +498,207 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
 }
 
 const styles = StyleSheet.create({
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  balanceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  holdBanner: {
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-  },
-  balanceBadgeLabel: {
-    fontSize: 11.5,
-    color: colors.textMuted,
-  },
-  balanceBadgeValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  holdBanner: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderWidth: 1.5,
-    borderColor: '#F59E0B',
+    borderColor: 'rgba(234, 179, 84, 0.28)',
     borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    padding: 15,
+    marginBottom: 18,
+    gap: 8,
   },
-  holdWarningTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FBBF24',
-    lineHeight: 19,
-  },
-  holdMetaRow: {
+  holdTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: spacing.sm,
+    gap: 8,
   },
-  holdMetaText: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  holdCountdownBox: {
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 4,
-    alignItems: 'center',
-  },
-  holdCountdownLabel: {
-    fontSize: 9.5,
-    color: '#FBBF24',
-    fontWeight: '700',
+  holdCountdownBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: radius.xs,
+    backgroundColor: colors.warningSoft,
   },
   holdCountdownValue: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#FFFFFF',
+    fontFamily: baseFontFamily,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.warning,
   },
+  holdNoticeText: {
+    fontFamily: baseFontFamily,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: colors.textMuted,
+  },
+  holdFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    gap: 8,
+  },
+  holdMetaText: {
+    fontFamily: baseFontFamily,
+    fontSize: 11,
+    color: colors.textFaint,
+    flex: 1,
+  },
+  holdActionLink: {
+    fontFamily: baseFontFamily,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+
   gatewayRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    gap: 10,
+    marginBottom: 14,
   },
-  gatewayCard: {
+  gatewayTile: {
     flex: 1,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    padding: spacing.md,
+    minWidth: 0,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingVertical: 13,
+    paddingHorizontal: 8,
     alignItems: 'center',
   },
-  gatewayDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginBottom: 6,
+  gatewayTileSelected: {
+    borderColor: colors.primaryBorder,
+    backgroundColor: 'rgba(34, 199, 182, 0.08)',
+  },
+  gatewayBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 7,
+  },
+  gatewayBadgeText: {
+    fontFamily: baseFontFamily,
+    fontSize: 11,
+    fontWeight: '800',
   },
   gatewayName: {
-    fontSize: 13.5,
-    fontWeight: '800',
+    fontFamily: baseFontFamily,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '700',
     color: colors.text,
   },
   gatewayBn: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: baseFontFamily,
+    fontSize: 11,
+    lineHeight: 15,
+    color: colors.textMuted,
     marginTop: 2,
   },
+
   formCard: {
-    borderWidth: 1.5,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
-  selectedGatewayHeader: {
+  selectedMethodBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    gap: 7,
+    paddingBottom: 12,
+    marginBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
   },
-  gatewayPill: {
-    paddingHorizontal: spacing.sm + 4,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
+  methodDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  gatewayPillText: {
-    fontSize: 11.5,
-    fontWeight: '900',
-    color: '#FFFFFF',
+  selectedMethodTitle: {
+    fontFamily: baseFontFamily,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
   },
-  selectedGatewaySub: {
+  selectedMethodSub: {
+    fontFamily: baseFontFamily,
     fontSize: 12,
     color: colors.textMuted,
     flex: 1,
   },
+
   inputLabel: {
+    fontFamily: baseFontFamily,
     fontSize: 12.5,
-    fontWeight: '700',
-    color: colors.text,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: '#DCE6F2',
     marginBottom: 6,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 11,
-    fontSize: 15.5,
-    fontWeight: '700',
-    color: colors.text,
   },
   quickAmountRow: {
     flexDirection: 'row',
-    gap: spacing.xs + 2,
-    marginBottom: spacing.sm,
+    gap: 8,
+    marginBottom: 10,
   },
   quickChip: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: radius.md,
+    minHeight: 40,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surfaceSecondary,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickChipActive: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
   },
   quickChipText: {
-    fontSize: 12.5,
+    fontFamily: baseFontFamily,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  quickChipTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+
+  amountInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 46,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+    paddingHorizontal: 14,
+  },
+  amountInputBoxFocused: {
+    borderColor: colors.primary,
+    backgroundColor: '#152236',
+  },
+  amountCurrency: {
+    fontFamily: baseFontFamily,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textMuted,
+    marginRight: 6,
+  },
+  amountInput: {
+    flex: 1,
+    fontFamily: baseFontFamily,
+    paddingVertical: 11,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.text,
   },
-  amountInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 11,
-    fontSize: 17,
-    fontWeight: '800',
-    color: colors.text,
-  },
+
   modalBackdrop: {
     flex: 1,
     backgroundColor: colors.overlay,
@@ -641,85 +711,88 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    padding: spacing.lg,
-  },
-  devOtpToast: {
-    backgroundColor: 'rgba(20, 184, 166, 0.16)',
     borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    marginBottom: spacing.md,
+    borderColor: colors.borderStrong,
+    padding: 20,
   },
-  devOtpToastText: {
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 14,
+  },
+  devOtpBar: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+    borderRadius: radius.sm,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+  },
+  devOtpText: {
+    fontFamily: baseFontFamily,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
     color: colors.primary,
     textAlign: 'center',
   },
   summaryBox: {
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: radius.md,
-    padding: spacing.md,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: spacing.md,
+    marginBottom: 14,
   },
   otpInput: {
-    borderWidth: 1.5,
+    fontFamily: baseFontFamily,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surfaceSecondary,
     paddingVertical: 12,
-    fontSize: 24,
-    fontWeight: '900',
-    color: colors.text,
-    textAlign: 'center',
-    letterSpacing: 12,
-    marginBottom: spacing.sm,
-  },
-  resendTimerText: {
-    fontSize: 11.5,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  holdIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  holdModalHeading: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '800',
     color: colors.text,
     textAlign: 'center',
-    marginBottom: spacing.sm,
+    letterSpacing: 10,
+    marginBottom: 10,
   },
-  exactWarningBox: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  exactWarningText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FBBF24',
-    lineHeight: 20,
+  resendTimerText: {
+    fontFamily: baseFontFamily,
+    fontSize: 11.5,
+    color: colors.textMuted,
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  holdIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.warningSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(234, 179, 84, 0.30)',
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  holdModalHeading: {
+    ...type.h2,
+    textAlign: 'center',
+  },
+  holdModalSub: {
+    ...type.caption,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 16,
   },
 });
 

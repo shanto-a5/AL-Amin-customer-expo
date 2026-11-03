@@ -1,31 +1,51 @@
-import { StyleSheet, TextStyle, ViewStyle } from 'react-native';
+import { Platform, StyleSheet, TextStyle, ViewStyle } from 'react-native';
 
 /**
- * AllPay BD (অল পে বিডি) Design Tokens — sleek dark fintech palette with
- * operator and gateway signature accents.
+ * AllPay BD (অল পে বিডি) Fintech Design System Tokens
+ * Grounded in the minimalist dark slate & teal visual benchmark.
  */
 export const colors = {
-  primary: '#14B8A6',
-  primaryDark: '#0D9488',
-  primarySoft: '#0F292A',
-  accent: '#06B6D4',
-  surface: '#0F172A',
-  surfaceElevated: '#1E293B',
-  surfaceMuted: '#1E293B',
-  background: '#000000',
-  border: '#334155',
-  text: '#F8FAFC',
-  textMuted: '#94A3B8',
-  textFaint: '#64748B',
-  textInverse: '#042F2E',
-  danger: '#EF4444',
-  dangerSoft: '#2A1215',
-  warning: '#F59E0B',
-  warningSoft: '#2D210B',
-  success: '#10B981',
-  successSoft: '#062E22',
-  overlay: 'rgba(2, 6, 23, 0.84)',
+  background: '#0B1120',
+  surface: '#111B2D',
+  surfaceSecondary: '#172338',
+  surfaceMuted: '#172338',
+  surfaceElevated: '#1C2A40',
+
+  walletSurface: '#13263B',
+  walletBorder: 'rgba(74, 211, 196, 0.24)',
+  walletDivider: 'rgba(205, 232, 239, 0.12)',
+
+  border: 'rgba(157, 178, 205, 0.13)',
+  borderStrong: 'rgba(157, 178, 205, 0.22)',
+  divider: 'rgba(157, 178, 205, 0.10)',
+
+  text: '#F4F7FB',
+  textSecondary: '#9AAAC0',
+  textMuted: '#9AAAC0',
+  textFaint: '#72839B',
+  textInverse: '#052B2C',
+
+  primary: '#22C7B6',
+  primaryDark: '#12B6A6',
+  primarySoft: 'rgba(34, 199, 182, 0.12)',
+  primaryBorder: 'rgba(34, 199, 182, 0.36)',
+  accent: '#22C7B6',
+
+  success: '#35C994',
+  successSoft: 'rgba(53, 201, 148, 0.12)',
+  warning: '#EAB354',
+  warningSoft: 'rgba(234, 179, 84, 0.12)',
+  danger: '#F06A7E',
+  dangerSoft: 'rgba(240, 106, 126, 0.12)',
+
+  notificationDot: '#FF647D',
+  overlay: 'rgba(6, 10, 20, 0.78)',
 } as const;
+
+export const baseFontFamily = Platform.select({
+  web: 'Inter, "Noto Sans Bengali", "Hind Siliguri", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  default: undefined,
+});
 
 export type OperatorCode = 'GP' | 'ROBI' | 'BL' | 'AIRTEL' | 'TELETALK';
 export type GatewayCode = 'BKASH' | 'NAGAD' | 'BANK';
@@ -35,6 +55,7 @@ export interface OperatorMeta {
   name: string;
   bnName: string;
   shortLabel: string;
+  symbolLabel: string;
   color: string;
   softBg: string;
   prefixes: string[];
@@ -47,50 +68,55 @@ export const OPERATORS: Record<OperatorCode, OperatorMeta> = {
     name: 'Grameenphone',
     bnName: 'গ্রামীণফোন',
     shortLabel: 'GP',
-    color: '#10B981',
-    softBg: 'rgba(16, 185, 129, 0.14)',
+    symbolLabel: 'GP',
+    color: '#37D79D',
+    softBg: 'rgba(17, 190, 128, 0.14)',
     prefixes: ['017', '013'],
-    tagline: '017 • 013 নেটওয়ার্ক',
+    tagline: '017 · 013 network',
   },
   ROBI: {
     code: 'ROBI',
     name: 'Robi',
     bnName: 'রবি',
-    shortLabel: 'ROBI',
-    color: '#EF4444',
-    softBg: 'rgba(239, 68, 68, 0.14)',
+    shortLabel: 'Robi',
+    symbolLabel: 'ROBI',
+    color: '#FF7181',
+    softBg: 'rgba(255, 80, 97, 0.13)',
     prefixes: ['018'],
-    tagline: '018 নেটওয়ার্ক',
+    tagline: '018 network',
   },
   BL: {
     code: 'BL',
     name: 'Banglalink',
     bnName: 'বাংলালিংক',
     shortLabel: 'BL',
-    color: '#F97316',
-    softBg: 'rgba(249, 115, 22, 0.14)',
+    symbolLabel: 'BL',
+    color: '#FFA04C',
+    softBg: 'rgba(255, 139, 45, 0.14)',
     prefixes: ['019', '014'],
-    tagline: '019 • 014 নেটওয়ার্ক',
+    tagline: '019 · 014 network',
   },
   AIRTEL: {
     code: 'AIRTEL',
     name: 'Airtel',
     bnName: 'এয়ারটেল',
-    shortLabel: 'AIRTEL',
-    color: '#F43F5E',
-    softBg: 'rgba(244, 63, 94, 0.14)',
+    shortLabel: 'Airtel',
+    symbolLabel: 'airtel',
+    color: '#FF6B8E',
+    softBg: 'rgba(255, 63, 108, 0.13)',
     prefixes: ['016'],
-    tagline: '016 নেটওয়ার্ক',
+    tagline: '016 network',
   },
   TELETALK: {
     code: 'TELETALK',
     name: 'Teletalk',
     bnName: 'টেলিটক',
-    shortLabel: 'TT',
-    color: '#14B8A6',
-    softBg: 'rgba(20, 184, 166, 0.14)',
+    shortLabel: 'Teletalk',
+    symbolLabel: 'TT',
+    color: '#73B5FF',
+    softBg: 'rgba(67, 156, 255, 0.13)',
     prefixes: ['015'],
-    tagline: '015 নেটওয়ার্ক',
+    tagline: '015 network',
   },
 };
 
@@ -116,6 +142,7 @@ export interface GatewayMeta {
   code: GatewayCode;
   name: string;
   bnName: string;
+  shortLabel: string;
   color: string;
   softBg: string;
   placeholder: string;
@@ -127,28 +154,31 @@ export const GATEWAYS: Record<GatewayCode, GatewayMeta> = {
     code: 'BKASH',
     name: 'bKash',
     bnName: 'বিকাশ',
-    color: '#E2136E',
-    softBg: 'rgba(226, 19, 110, 0.15)',
-    placeholder: '01XXXXXXXXX (বিকাশ নম্বর)',
-    subtitle: 'Instant bKash Wallet Transfer',
+    shortLabel: 'bK',
+    color: '#FF6B9D',
+    softBg: 'rgba(255, 107, 157, 0.13)',
+    placeholder: '01XXXXXXXXX',
+    subtitle: 'bKash mobile wallet transfer',
   },
   NAGAD: {
     code: 'NAGAD',
     name: 'Nagad',
     bnName: 'নগদ',
-    color: '#F7941D',
-    softBg: 'rgba(247, 148, 29, 0.15)',
-    placeholder: '01XXXXXXXXX (নগদ নম্বর)',
-    subtitle: 'Instant Nagad Cash-In',
+    shortLabel: 'NG',
+    color: '#FFA04C',
+    softBg: 'rgba(255, 160, 76, 0.13)',
+    placeholder: '01XXXXXXXXX',
+    subtitle: 'Nagad wallet cash-in',
   },
   BANK: {
     code: 'BANK',
-    name: 'Bank Account',
-    bnName: 'ব্যাংক অ্যাকাউন্ট',
-    color: '#3B82F6',
-    softBg: 'rgba(59, 130, 246, 0.15)',
-    placeholder: 'Account / Card Number',
-    subtitle: 'NPSB / BEFTN / Visa & MasterCard',
+    name: 'Bank',
+    bnName: 'ব্যাংক',
+    shortLabel: 'BK',
+    color: '#73B5FF',
+    softBg: 'rgba(115, 181, 255, 0.13)',
+    placeholder: 'Account or card number',
+    subtitle: 'NPSB · BEFTN · Card transfer',
   },
 };
 
@@ -166,31 +196,136 @@ export function formatBdt(amount: number, showDecimals = false): string {
   })}`;
 }
 
-export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
-export const radius = { sm: 8, md: 12, lg: 16, xl: 24, pill: 999 } as const;
+export function formatBdtNumber(amount: number, showDecimals = true): string {
+  const safe = Number.isFinite(amount) ? amount : 0;
+  return safe.toLocaleString('en-IN', {
+    minimumFractionDigits: showDecimals ? 2 : 0,
+    maximumFractionDigits: 2,
+  });
+}
 
-export const type = {
-  display: { fontSize: 30, fontWeight: '800', letterSpacing: -0.5, color: colors.text } as TextStyle,
-  h1: { fontSize: 24, fontWeight: '700', letterSpacing: -0.3, color: colors.text } as TextStyle,
-  h2: { fontSize: 18, fontWeight: '700', color: colors.text } as TextStyle,
-  h3: { fontSize: 15, fontWeight: '600', color: colors.text } as TextStyle,
-  body: { fontSize: 14, lineHeight: 20, color: colors.text } as TextStyle,
-  bodyMuted: { fontSize: 14, lineHeight: 20, color: colors.textMuted } as TextStyle,
-  caption: { fontSize: 12, color: colors.textMuted } as TextStyle,
-  label: { fontSize: 13, fontWeight: '600', color: colors.text } as TextStyle,
+/** 4px / 8px spacing scale */
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
 } as const;
 
-export function makeShadow(elevation = 2): ViewStyle {
+/** Consistent corner radii scale */
+export const radius = {
+  xs: 8,
+  sm: 11,
+  md: 14,
+  lg: 18,
+  xl: 24,
+  pill: 999,
+} as const;
+
+/** Readable English + Bengali typography hierarchy */
+export const type = {
+  eyebrow: {
+    fontFamily: baseFontFamily,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '700',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    color: colors.primary,
+  } as TextStyle,
+  display: {
+    fontFamily: baseFontFamily,
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '800',
+    letterSpacing: -0.9,
+    color: colors.text,
+  } as TextStyle,
+  h1: {
+    fontFamily: baseFontFamily,
+    fontSize: 25,
+    lineHeight: 32,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    color: colors.text,
+  } as TextStyle,
+  h2: {
+    fontFamily: baseFontFamily,
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    color: colors.text,
+  } as TextStyle,
+  h3: {
+    fontFamily: baseFontFamily,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '600',
+    color: colors.text,
+  } as TextStyle,
+  body: {
+    fontFamily: baseFontFamily,
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: '400',
+    color: colors.text,
+  } as TextStyle,
+  bodyMuted: {
+    fontFamily: baseFontFamily,
+    fontSize: 13.5,
+    lineHeight: 20,
+    fontWeight: '400',
+    color: colors.textMuted,
+  } as TextStyle,
+  label: {
+    fontFamily: baseFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: colors.text,
+  } as TextStyle,
+  caption: {
+    fontFamily: baseFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '400',
+    color: colors.textMuted,
+  } as TextStyle,
+  meta: {
+    fontFamily: baseFontFamily,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '500',
+    color: colors.textFaint,
+  } as TextStyle,
+} as const;
+
+export function makeShadow(elevation = 1): ViewStyle {
+  if (elevation <= 0) {
+    return {
+      shadowColor: '#000000',
+      shadowOpacity: 0,
+      shadowRadius: 0,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 0,
+    };
+  }
   return {
     shadowColor: '#000000',
-    shadowOpacity: elevation > 0 ? 0.45 : 0,
-    shadowRadius: 4 + elevation * 2,
-    shadowOffset: { width: 0, height: 1 + elevation },
+    shadowOpacity: Math.min(0.26, 0.12 + elevation * 0.04),
+    shadowRadius: 8 + elevation * 4,
+    shadowOffset: { width: 0, height: 3 + elevation * 2 },
     elevation,
   };
 }
 
-export function row(justify: 'flex-start' | 'center' | 'space-between' | 'flex-end' = 'space-between'): ViewStyle {
+export function row(
+  justify: 'flex-start' | 'center' | 'space-between' | 'flex-end' = 'space-between',
+): ViewStyle {
   return { flexDirection: 'row', alignItems: 'center', justifyContent: justify };
 }
 
@@ -199,5 +334,5 @@ export const layout = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  padded: { padding: spacing.lg },
+  padded: { padding: spacing.xl },
 });

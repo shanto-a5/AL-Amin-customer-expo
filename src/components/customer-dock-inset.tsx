@@ -1,23 +1,21 @@
 /**
- * Bottom clearance contract for the customer bottom dock.
+ * Bottom clearance contract for the integrated bottom navigation bar.
  *
- * The dock is a floating overlay owned by whichever shell renders it — the
- * `/(home)` marketplace shell and the `/(seller)` workspace shell both float the
- * same `CustomerBottomDock`, so a seller is never trapped in the workspace. The
- * shell publishes the required clearance through context and the shared `Screen`
- * reads it, rather than every screen under a dock being patched individually.
- * The auth shell has no dock, so the context is absent there and `Screen`
- * behaves exactly as before.
+ * Publishes the exact height + safe-area inset + comfortable scroll breathing
+ * room so every `Screen` inside the authenticated shell scrolls its final item
+ * cleanly into view without being obscured by `BottomNavigation`.
  */
 import * as React from 'react';
-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-/** Height of the floating dock surface, excluding the safe-area gap. */
-export const CUSTOMER_DOCK_HEIGHT = 60;
+/** Height of the compact integrated bottom navigation bar (excluding safe-area inset). */
+export const CUSTOMER_DOCK_HEIGHT = 64;
 
-/** Small visual gap so the dock floats above the home indicator / page edge. */
-export const CUSTOMER_DOCK_BOTTOM_GAP = 10;
+/** Integrated bottom bar sits flush at the bottom edge. */
+export const CUSTOMER_DOCK_BOTTOM_GAP = 0;
+
+/** Extra scroll breathing room above the bottom bar. */
+const SCROLL_BREATHING_SPACE = 24;
 
 const CustomerDockClearanceContext = React.createContext<number | null>(null);
 
@@ -27,7 +25,7 @@ export function CustomerDockClearanceProvider({
   children: React.ReactNode;
 }): React.JSX.Element {
   const insets = useSafeAreaInsets();
-  const clearance = CUSTOMER_DOCK_HEIGHT + CUSTOMER_DOCK_BOTTOM_GAP + insets.bottom;
+  const clearance = CUSTOMER_DOCK_HEIGHT + insets.bottom + SCROLL_BREATHING_SPACE;
 
   return (
     <CustomerDockClearanceContext.Provider value={clearance}>
@@ -36,10 +34,6 @@ export function CustomerDockClearanceProvider({
   );
 }
 
-/**
- * Bottom space the floating dock occupies, or `null` when the current shell has
- * no dock (auth), so callers can leave their layout untouched.
- */
 export function useCustomerDockClearance(): number | null {
   return React.useContext(CustomerDockClearanceContext);
 }

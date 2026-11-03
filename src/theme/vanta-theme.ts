@@ -1,37 +1,39 @@
 /**
- * AllPay BD theme tokens and layout helpers.
+ * AllPay BD theme compatibility tokens and layout helpers.
  */
 import type { TextStyle, ViewStyle } from 'react-native';
 
+import { baseFontFamily, colors, makeShadow as tokenShadow } from './tokens';
+
 export const vanta = {
   colors: {
-    primary: '#14B8A6',
-    primaryDark: '#0D9488',
-    primarySoft: '#0F292A',
-    accent: '#06B6D4',
-    bg: '#000000',
-    surface: '#0F172A',
-    border: '#334155',
-    text: '#F8FAFC',
-    textMuted: '#94A3B8',
-    textInverse: '#042F2E',
-    overlay: 'rgba(2, 6, 23, 0.84)',
-    danger: '#EF4444',
-    dangerSoft: '#2A1215',
-    success: '#10B981',
-    successSoft: '#062E22',
-    infoSoft: '#0F292A',
+    primary: colors.primary,
+    primaryDark: colors.primaryDark,
+    primarySoft: colors.primarySoft,
+    accent: colors.accent,
+    bg: colors.background,
+    surface: colors.surface,
+    border: colors.border,
+    text: colors.text,
+    textMuted: colors.textMuted,
+    textInverse: colors.textInverse,
+    overlay: colors.overlay,
+    danger: colors.danger,
+    dangerSoft: colors.dangerSoft,
+    success: colors.success,
+    successSoft: colors.successSoft,
+    infoSoft: colors.primarySoft,
   },
   typography: {
-    title: { fontSize: 28, fontWeight: '800', color: '#F8FAFC' } as TextStyle,
-    h1: { fontSize: 22, fontWeight: '700', color: '#F8FAFC' } as TextStyle,
-    h2: { fontSize: 17, fontWeight: '700', color: '#F8FAFC' } as TextStyle,
-    body: { fontSize: 14, fontWeight: '400', color: '#F8FAFC' } as TextStyle,
-    label: { fontSize: 13, fontWeight: '600', color: '#F8FAFC' } as TextStyle,
-    caption: { fontSize: 12, fontWeight: '400', color: '#94A3B8' } as TextStyle,
+    title: { fontFamily: baseFontFamily, fontSize: 25, fontWeight: '700', color: colors.text } as TextStyle,
+    h1: { fontFamily: baseFontFamily, fontSize: 22, fontWeight: '700', color: colors.text } as TextStyle,
+    h2: { fontFamily: baseFontFamily, fontSize: 17, fontWeight: '700', color: colors.text } as TextStyle,
+    body: { fontFamily: baseFontFamily, fontSize: 14, fontWeight: '400', color: colors.text } as TextStyle,
+    label: { fontFamily: baseFontFamily, fontSize: 13, fontWeight: '600', color: colors.text } as TextStyle,
+    caption: { fontFamily: baseFontFamily, fontSize: 12, fontWeight: '400', color: colors.textMuted } as TextStyle,
   },
-  spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, '2xl': 32 },
-  radius: { sm: 6, md: 10, lg: 16, xl: 24, pill: 999 },
+  spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, '2xl': 24 },
+  radius: { sm: 11, md: 14, lg: 18, xl: 24, pill: 999 },
 };
 
 export interface Shadow {
@@ -42,34 +44,34 @@ export interface Shadow {
   elevation: number;
 }
 
-export function makeShadow(elevation = 2): Shadow {
+export function makeShadow(elevation = 1): Shadow {
+  const s = tokenShadow(elevation);
   return {
-    shadowColor: '#000000',
-    shadowOpacity: 0.4 + elevation * 0.05,
-    shadowRadius: 4 + elevation * 1.5,
-    shadowOffset: { width: 0, height: 1 + elevation },
+    shadowColor: String(s.shadowColor ?? '#000000'),
+    shadowOpacity: Number(s.shadowOpacity ?? 0.16),
+    shadowRadius: Number(s.shadowRadius ?? 12),
+    shadowOffset: (s.shadowOffset as { width: number; height: number }) ?? { width: 0, height: 4 },
     elevation,
   };
 }
 
 export function card(): ViewStyle {
   return {
-    backgroundColor: vanta.colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: vanta.radius.lg,
     padding: vanta.spacing.lg,
     borderWidth: 1,
-    borderColor: vanta.colors.border,
-    ...makeShadow(1),
+    borderColor: colors.border,
   };
 }
 
 export const iconForeground = (token: string): { name: string; color: string } => {
   switch (token) {
     case 'user':
-      return { name: 'person', color: '#14B8A6' };
+      return { name: 'person', color: colors.primary };
     case 'admin':
-      return { name: 'shield', color: '#06B6D4' };
+      return { name: 'shield', color: colors.primary };
     default:
-      return { name: 'circle', color: vanta.colors.textMuted };
+      return { name: 'circle', color: colors.textMuted };
   }
 };

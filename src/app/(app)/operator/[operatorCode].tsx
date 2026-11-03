@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import * as React from 'react';
 import {
-  ActivityIndicator,
+  AccessibilityInfo,
   Animated,
   Keyboard,
   Modal,
@@ -15,14 +15,21 @@ import {
 } from 'react-native';
 
 import { vantaApi, type RechargeReceipt } from '@/api/vanta-api';
-import { BackButton } from '@/components/back-button';
 import {
-  Button,
+  OfferRow,
+  PageHeader,
+  WalletMiniPill,
+} from '@/components/fintech-ui';
+import {
+  AppIcon,
   Card,
+  EmptyState,
   FilterTabs,
+  LoadingSkeleton,
   NoticeCard,
-  Pill,
+  PrimaryButton,
   Screen,
+  SecondaryButton,
   SectionHeader,
   SummaryRow,
 } from '@/components/ui';
@@ -30,6 +37,7 @@ import type { OfferCategory, OfferDto } from '@/domain/types';
 import { withSession } from '@/modules/session/route-guard';
 import type { SessionContextValue } from '@/modules/session/session-context';
 import {
+  baseFontFamily,
   colors,
   detectOperatorFromPhone,
   formatBdt,
@@ -51,6 +59,8 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
   const operator = OPERATORS[activeOpCode];
 
   const [targetPhone, setTargetPhone] = React.useState('');
+  const [phoneFocused, setPhoneFocused] = React.useState(false);
+  const [amountFocused, setAmountFocused] = React.useState(false);
   const [mnpOverride, setMnpOverride] = React.useState(false);
   const [amountInput, setAmountInput] = React.useState('100');
   const [selectedOffer, setSelectedOffer] = React.useState<OfferDto | null>(null);
@@ -67,13 +77,12 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
 
   const [receipt, setReceipt] = React.useState<RechargeReceipt | null>(null);
   const [copiedNotice, setCopiedNotice] = React.useState(false);
-  const receiptScale = React.useRef(new Animated.Value(0.85)).current;
+  const [receiptScale] = React.useState(() => new Animated.Value(1));
 
   const userBalance = session.user?.balance ?? 0;
 
   React.useEffect(() => {
     let mounted = true;
-    setLoadingOffers(true);
     vantaApi
       .offers({ operator: activeOpCode })
       .then((res) => {
@@ -127,25 +136,27 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
     const cleanPhone = targetPhone.trim();
 
     if (!BD_PHONE_RE.test(cleanPhone)) {
-      setFormError('সঠিক ১১ ডিজিটের প্রাপক মোবাইল নম্বর দিন (01XXXXXXXXX) • Enter a valid 11-digit BD mobile number.');
+      setFormError(
+        'সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (01XXXXXXXXX) · Enter a valid 11-digit BD mobile number.',
+      );
       return;
     }
 
     if (prefixMismatch) {
       setFormError(
-        `এই নম্বরটি ${OPERATORS[detectedOp!].name} প্রিফিক্সের। নম্বরটি পোর্টেড (MNP) হলে নিচের MNP অপশনটি চালু করুন।`,
+        `This number uses a ${OPERATORS[detectedOp!].name} prefix. Enable MNP ported number below if it was ported to ${operator.name}.`,
       );
       return;
     }
 
     if (!selectedOffer && (numericAmount < 10 || numericAmount > 10000)) {
-      setFormError('ফ্লেক্সিলোড পরিমাণ ৳১০ থেকে ৳১০,০০০ এর মধ্যে হতে হবে।');
+      setFormError('Flexiload amount must be between ৳10 and ৳10,000.');
       return;
     }
 
     if (numericAmount > userBalance) {
       setFormError(
-        `অপর্যাপ্ত ব্যালেন্স! আপনার বর্তমান ব্যালেন্স ${formatBdt(userBalance)}, কিন্তু প্রয়োজন ${formatBdt(numericAmount)}। আগে অ্যাড মানি করুন।`,
+        `Insufficient wallet balance (${formatBdt(userBalance)} available, ${formatBdt(numericAmount)} required). Please Add Money first.`,
       );
       return;
     }
@@ -159,7 +170,7 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
     setPinError(null);
     const cleanPin = pinInput.trim();
     if (!/^\d{4}$/.test(cleanPin)) {
-      setPinError('আপনার ৪ ডিজিটের গোপন পিন দিন • Enter your 4-digit security PIN.');
+      setPinError('Enter your 4-digit security PIN.');
       return;
     }
 
@@ -175,15 +186,24 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
       });
       await session.refresh();
       setPinModalOpen(false);
-      receiptScale.setValue(0.85);
-      setReceipt(result);
-      Animated.spring(receiptScale, {
-        toValue: 1,
-        useNativeDriver: true,
-        friction: 6,
-      }).start();
+
+      const reduceMotion = await AccessibilityInfo.isReduceMotionEnabled().catch(() => false);
+      if (reduceMotion) {
+        receiptScale.setValue(1);
+        setReceipt(result);
+      } else {
+        receiptScale.setValue(0.95);
+        setReceipt(result);
+        Animated.spring(receiptScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          friction: 8,
+        }).start();
+      }
     } catch (error) {
-      setPinError(error instanceof Error ? error.message : 'Transaction failed. Please check your PIN.');
+      setPinError(
+        error instanceof Error ? error.message : 'Transaction failed. Please verify your PIN.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -192,11 +212,11 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
   const handleShareReceipt = async () => {
     if (!receipt) return;
     const text = [
-      '=== AllPay BD (অল পে বিডি) Receipt ===',
-      `TrxID: ${receipt.trxId}`,
+      'AllPay BD (অল পে বিডি) — Recharge Receipt',
+      `Reference: ${receipt.trxId}`,
       `Operator: ${operator.name} (${operator.bnName})`,
       `Recipient: ${receipt.targetPhone}`,
-      `Type: ${receipt.offerTitle || 'Flexiload Recharge'}`,
+      `Package: ${receipt.offerTitle || 'Flexiload Recharge'}`,
       `Amount: ${formatBdt(receipt.amount)}`,
       `New Balance: ${formatBdt(receipt.balanceAfter, true)}`,
       `Time: ${new Date(receipt.createdAt).toLocaleString()}`,
@@ -205,7 +225,7 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
     try {
       await Share.share({ message: text });
     } catch {
-      // Fallback notification
+      // Ignore cancellation
     }
     setCopiedNotice(true);
     setTimeout(() => setCopiedNotice(false), 3000);
@@ -213,76 +233,59 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
 
   return (
     <Screen padded>
-      <View style={styles.topBar}>
-        <BackButton fallbackHref="/home" />
-        <View style={styles.balanceChip}>
-          <Text style={styles.balanceChipLabel}>ব্যালেন্স:</Text>
-          <Text style={styles.balanceChipValue}>{formatBdt(userBalance, true)}</Text>
-        </View>
-      </View>
+      <PageHeader
+        backFallbackHref="/home"
+        rightAccessory={<WalletMiniPill balance={userBalance} />}
+        title="Mobile recharge"
+        subtitle="মোবাইল রিচার্জ এবং ইন্টারনেট বা মিনিট প্যাক কিনুন"
+      />
 
-      {/* Operator Switcher Pills */}
-      <View style={styles.opSwitchRow}>
-        {OPERATOR_LIST.map((op) => {
-          const isCurrent = op.code === activeOpCode;
-          return (
-            <Pressable
-              key={op.code}
-              onPress={() => {
-                setSelectedOffer(null);
-                setFormError(null);
-                router.replace({ pathname: '/operator/[operatorCode]', params: { operatorCode: op.code } });
-              }}
-              style={[
-                styles.opSwitchChip,
-                isCurrent && { backgroundColor: op.softBg, borderColor: op.color },
-              ]}
-            >
-              <Text style={[styles.opSwitchText, isCurrent && { color: op.color, fontWeight: '800' }]}>
-                {op.shortLabel}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {/* Compact Operator Switcher */}
+      <FilterTabs
+        tabs={OPERATOR_LIST.map((op) => ({
+          key: op.code,
+          label: op.name,
+          accentColor: op.color,
+        }))}
+        active={activeOpCode}
+        onChange={(code) => {
+          if (code === activeOpCode) return;
+          setSelectedOffer(null);
+          setFormError(null);
+          setLoadingOffers(true);
+          router.replace({ pathname: '/operator/[operatorCode]', params: { operatorCode: code } });
+        }}
+      />
 
-      {/* Operator Signature Header Card */}
-      <View
-        style={[
-          styles.opHeroBanner,
-          {
-            backgroundColor: operator.softBg,
-            borderColor: operator.color,
-          },
-        ]}
-      >
-        <View style={[styles.opHeroCircle, { backgroundColor: operator.color }]}>
-          <Text style={styles.opHeroCircleText}>{operator.shortLabel}</Text>
+      {/* Restrained Selected Operator Header Row */}
+      <View style={styles.operatorIdentityRow}>
+        <View style={[styles.operatorSymbol, { backgroundColor: operator.softBg }]}>
+          <Text style={[styles.operatorSymbolText, { color: operator.color }]}>
+            {operator.symbolLabel}
+          </Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.opHeroTitle}>
-            {operator.name} • {operator.bnName}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.operatorIdentityTitle}>
+            {operator.name} <Text style={styles.operatorIdentityBn}>· {operator.bnName}</Text>
           </Text>
-          <Text style={styles.opHeroSub}>
-            ফ্লেক্সিলোড ও ইন্টারনেট/মিনিট প্যাক • {operator.tagline}
-          </Text>
+          <Text style={styles.operatorIdentityMeta}>{operator.tagline}</Text>
         </View>
       </View>
 
       {formError ? (
         <NoticeCard
           tone="danger"
-          title="অনুগ্রহ করে যাচাই করুন • Check Input"
+          title="Check recharge details"
           message={formError}
           onDismiss={() => setFormError(null)}
         />
       ) : null}
 
-      {/* Top Section: 2-in-1 Flexiload & Selected Offer Input Card */}
-      <Card style={{ ...styles.rechargeCard, borderColor: operator.color }}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={type.h2}>
-            {selectedOffer ? '📦 অফার ক্রয় • Offer Purchase' : '⚡ ফ্লেক্সিলোড • Instant Flexiload'}
+      {/* Recharge / Offer Purchase Form Card */}
+      <Card style={styles.formCard}>
+        <View style={styles.formCardHeader}>
+          <Text style={type.h3}>
+            {selectedOffer ? 'Selected package' : 'Flexiload recharge'}
           </Text>
           {selectedOffer ? (
             <Pressable
@@ -290,21 +293,22 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
                 setSelectedOffer(null);
                 setAmountInput('100');
               }}
-              style={styles.clearOfferChip}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Switch back to custom Flexiload amount"
+              style={styles.clearOfferBtn}
             >
-              <Text style={styles.clearOfferText}>✕ ফ্লেক্সিলোডে ফিরুন</Text>
+              <Text style={styles.clearOfferText}>Switch to Flexiload</Text>
             </Pressable>
           ) : null}
         </View>
 
         {selectedOffer ? (
-          <View style={[styles.selectedOfferBanner, { borderColor: operator.color, backgroundColor: operator.softBg }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.selectedOfferTitle, { color: operator.color }]}>
-                {selectedOffer.title}
-              </Text>
+          <View style={styles.selectedOfferSummary}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.selectedOfferTitle}>{selectedOffer.title}</Text>
               <Text style={styles.selectedOfferMeta}>
-                মেয়াদ: {selectedOffer.validity} • ক্যাটাগরি: {selectedOffer.category}
+                {selectedOffer.category} · Valid for {selectedOffer.validity}
               </Text>
             </View>
             <Text style={styles.selectedOfferPrice}>{formatBdt(selectedOffer.price)}</Text>
@@ -312,29 +316,41 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
         ) : null}
 
         {/* Recipient Mobile Input */}
-        <Text style={styles.inputLabel}>প্রাপকের মোবাইল নম্বর • Recipient Number (11 Digits)</Text>
-        <View style={styles.phoneInputWrap}>
-          <TextInput
-            value={targetPhone}
-            onChangeText={(v) => {
-              setTargetPhone(v.replace(/\D/g, '').slice(0, 11));
-              setFormError(null);
-            }}
-            placeholder={`${operator.prefixes[0]}XXXXXXXX`}
-            placeholderTextColor={colors.textFaint}
-            keyboardType="phone-pad"
-            maxLength={11}
-            style={styles.phoneInput}
-          />
+        <Text style={styles.inputLabel}>Recipient mobile number · প্রাপকের নম্বর</Text>
+        <View style={styles.phoneInputRow}>
+          <View
+            style={[
+              styles.phoneInputBox,
+              phoneFocused && styles.inputBoxFocused,
+            ]}
+          >
+            <TextInput
+              value={targetPhone}
+              onChangeText={(v) => {
+                setTargetPhone(v.replace(/\D/g, '').slice(0, 11));
+                setFormError(null);
+              }}
+              onFocus={() => setPhoneFocused(true)}
+              onBlur={() => setPhoneFocused(false)}
+              placeholder={`${operator.prefixes[0]}XXXXXXXX`}
+              placeholderTextColor={colors.textFaint}
+              keyboardType="phone-pad"
+              maxLength={11}
+              accessibilityLabel="Recipient 11-digit mobile number"
+              style={styles.phoneInput}
+            />
+          </View>
           {session.user?.phone ? (
             <Pressable
               onPress={() => {
                 setTargetPhone(session.user?.phone ?? '');
                 setMnpOverride(true);
               }}
-              style={styles.myNumberBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Use my mobile number"
+              style={({ pressed }) => [styles.myNumberBtn, pressed && { opacity: 0.78 }]}
             >
-              <Text style={styles.myNumberBtnText}>My Number</Text>
+              <Text style={styles.myNumberBtnText}>My number</Text>
             </Pressable>
           ) : null}
         </View>
@@ -342,22 +358,24 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
         {/* MNP Ported Number Toggle */}
         <Pressable
           onPress={() => setMnpOverride((prev) => !prev)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: mnpOverride }}
           style={styles.mnpRow}
         >
-          <View style={[styles.checkbox, mnpOverride && { backgroundColor: operator.color, borderColor: operator.color }]}>
-            {mnpOverride ? <Text style={styles.checkmark}>✓</Text> : null}
+          <View style={[styles.checkbox, mnpOverride && styles.checkboxChecked]}>
+            {mnpOverride ? (
+              <AppIcon name="check" size={12} color={colors.textInverse} />
+            ) : null}
           </View>
           <Text style={styles.mnpText}>
-            MNP পোর্টেড নম্বর (অন্য অপারেটর প্রিফিক্স থেকে {operator.bnName}-এ স্থানান্তরিত)
+            MNP ported number (অন্য অপারেটর থেকে {operator.bnName}-এ পোর্টেড)
           </Text>
         </Pressable>
 
         {/* Quick Amount Chips & Custom Amount Input */}
         {!selectedOffer ? (
-          <>
-            <Text style={[styles.inputLabel, { marginTop: spacing.sm }]}>
-              টাকার পরিমাণ • Amount (৳10 – ৳10,000)
-            </Text>
+          <View style={{ marginTop: spacing.md }}>
+            <Text style={styles.inputLabel}>Amount · টাকার পরিমাণ (৳10 – ৳10,000)</Text>
             <View style={styles.quickChipsRow}>
               {QUICK_AMOUNTS.map((amt) => {
                 const active = Number(amountInput) === amt;
@@ -365,175 +383,192 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
                   <Pressable
                     key={amt}
                     onPress={() => setAmountInput(String(amt))}
-                    style={[
-                      styles.amountChip,
-                      active && { backgroundColor: operator.color, borderColor: operator.color },
-                    ]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    style={[styles.amountChip, active && styles.amountChipActive]}
                   >
-                    <Text style={[styles.amountChipText, active && { color: '#042F2E', fontWeight: '900' }]}>
+                    <Text style={[styles.amountChipText, active && styles.amountChipTextActive]}>
                       ৳{amt}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
-            <TextInput
-              value={amountInput}
-              onChangeText={(v) => setAmountInput(v.replace(/\D/g, '').slice(0, 5))}
-              placeholder="৳ পরিমাণ লিখুন (যেমন: 100)"
-              placeholderTextColor={colors.textFaint}
-              keyboardType="number-pad"
-              style={styles.amountInput}
-            />
-          </>
+            <View
+              style={[
+                styles.amountInputBox,
+                amountFocused && styles.inputBoxFocused,
+              ]}
+            >
+              <Text style={styles.amountCurrencyPrefix}>৳</Text>
+              <TextInput
+                value={amountInput}
+                onChangeText={(v) => setAmountInput(v.replace(/\D/g, '').slice(0, 5))}
+                onFocus={() => setAmountFocused(true)}
+                onBlur={() => setAmountFocused(false)}
+                placeholder="100"
+                placeholderTextColor={colors.textFaint}
+                keyboardType="number-pad"
+                accessibilityLabel="Recharge amount in Taka"
+                style={styles.amountInput}
+              />
+            </View>
+          </View>
         ) : null}
 
-        <View style={{ height: spacing.md }} />
-        <Button
-          title={`রিচার্জ নিশ্চিত করুন • Proceed (${formatBdt(numericAmount)})`}
+        <View style={{ height: spacing.lg }} />
+        <PrimaryButton
+          title={`Continue · ${formatBdt(numericAmount)}`}
           onPress={handleProceedToPin}
           fullWidth
-          style={{ backgroundColor: operator.color }}
         />
       </Card>
 
-      {/* Bottom Section: Internet & Combo Offers */}
-      <SectionHeader
-        title={`${operator.bnName} স্পেশাল অফার • Bundles`}
-        caption="যেকোনো অফারে ট্যাপ করলে স্বয়ংক্রিয়ভাবে দাম ও প্যাক সিলেক্ট হবে"
-      />
+      {/* Operator Bundles List */}
+      <View style={styles.offersSection}>
+        <SectionHeader
+          title={`${operator.name} bundles`}
+          caption="অফারে ট্যাপ করলে প্যাকটি সরাসরি সিলেক্ট হবে"
+        />
 
-      <FilterTabs
-        tabs={[
-          { key: 'ALL', label: 'All • সব', count: offers.length },
-          { key: 'INTERNET', label: 'Internet • ইন্টারনেট' },
-          { key: 'COMBO', label: 'Combo • কম্বো' },
-          { key: 'MINUTES', label: 'Minutes • মিনিট' },
-        ]}
-        active={categoryFilter}
-        onChange={(k) => setCategoryFilter(k as 'ALL' | OfferCategory)}
-      />
+        <FilterTabs
+          tabs={[
+            { key: 'ALL', label: 'All', count: offers.length },
+            { key: 'INTERNET', label: 'Internet' },
+            { key: 'COMBO', label: 'Combo' },
+            { key: 'MINUTES', label: 'Minutes' },
+          ]}
+          active={categoryFilter}
+          onChange={(k) => setCategoryFilter(k as 'ALL' | OfferCategory)}
+        />
 
-      {loadingOffers ? (
-        <View style={{ paddingVertical: spacing.xl, alignItems: 'center' }}>
-          <ActivityIndicator size="small" color={operator.color} />
-        </View>
-      ) : (
-        <View style={styles.offerList}>
-          {filteredOffers.map((offer) => {
-            const isSelected = selectedOffer?.id === offer.id;
-            return (
-              <Pressable
-                key={offer.id}
-                onPress={() => handleSelectOffer(offer)}
-                style={({ pressed }) => [
-                  styles.offerCard,
-                  isSelected && { borderColor: operator.color, backgroundColor: operator.softBg },
-                  pressed && { opacity: 0.88 },
-                ]}
-              >
-                <View style={{ flex: 1 }}>
-                  <View style={styles.offerBadgeRow}>
-                    <Pill
-                      label={offer.category}
-                      tone={offer.category === 'COMBO' ? 'info' : offer.category === 'INTERNET' ? 'success' : 'warning'}
-                    />
-                    <Text style={styles.offerValidity}>⏳ {offer.validity}</Text>
-                  </View>
-                  <Text style={styles.offerTitle}>{offer.title}</Text>
-                </View>
-                <View style={styles.offerRightCol}>
-                  <Text style={[styles.offerPrice, { color: operator.color }]}>{formatBdt(offer.price)}</Text>
-                  <View style={[styles.buyNowPill, { backgroundColor: isSelected ? operator.color : colors.surfaceElevated }]}>
-                    <Text style={[styles.buyNowPillText, isSelected && { color: '#042F2E' }]}>
-                      {isSelected ? '✓ Selected' : 'Select'}
-                    </Text>
-                  </View>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
+        {loadingOffers ? (
+          <LoadingSkeleton rows={3} height={84} />
+        ) : filteredOffers.length === 0 ? (
+          <EmptyState
+            title="No packages in this category"
+            message="Select another category filter above."
+          />
+        ) : (
+          <View style={styles.offerList}>
+            {filteredOffers.map((offer) => {
+              const isSelected = selectedOffer?.id === offer.id;
+              return (
+                <OfferRow
+                  key={offer.id}
+                  offer={offer}
+                  showOperator={false}
+                  selected={isSelected}
+                  actionLabel={isSelected ? 'Selected ✓' : 'Select →'}
+                  onPress={() => handleSelectOffer(offer)}
+                />
+              );
+            })}
+          </View>
+        )}
+      </View>
 
-      {/* Part 4A: 4-Digit Security PIN Verification Modal */}
+      {/* 4-Digit Security PIN Verification Modal */}
       <Modal
         visible={pinModalOpen}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setPinModalOpen(false)}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <View style={styles.modalBackdrop}>
             <View style={styles.modalSheet}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={type.h2}>🔐 ৪-ডিজিট গোপন পিন যাচাই করুন</Text>
-              <Pressable onPress={() => setPinModalOpen(false)}>
-                <Text style={styles.closeBtnText}>✕</Text>
-              </Pressable>
-            </View>
-            <Text style={[type.caption, { marginBottom: spacing.md }]}>
-              Confirm your AllPay BD transaction with your 4-digit security PIN
-            </Text>
+              <View style={styles.modalHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={type.h2}>Confirm with PIN</Text>
+                  <Text style={[type.caption, { marginTop: 2 }]}>
+                    আপনার ৪-ডিজিট গোপন পিন দিয়ে লেনদেন নিশ্চিত করুন
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setPinModalOpen(false)}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close PIN confirmation"
+                >
+                  <AppIcon name="close" size={18} color={colors.textMuted} />
+                </Pressable>
+              </View>
 
-            <View style={styles.summaryBox}>
-              <SummaryRow label="অপারেটর (Operator)" value={`${operator.name} (${operator.bnName})`} />
-              <SummaryRow label="প্রাপক নম্বর (Recipient)" value={targetPhone} />
-              <SummaryRow
-                label="সেবার ধরন (Type)"
-                value={selectedOffer ? selectedOffer.title : 'Flexiload (ফ্লেক্সিলোড)'}
+              <View style={styles.summaryBox}>
+                <SummaryRow
+                  label="Operator"
+                  value={`${operator.name} (${operator.bnName})`}
+                  showDivider
+                />
+                <SummaryRow label="Recipient" value={targetPhone} showDivider />
+                <SummaryRow
+                  label="Service"
+                  value={selectedOffer ? selectedOffer.title : 'Flexiload recharge'}
+                  showDivider
+                />
+                <SummaryRow
+                  label="Total amount"
+                  value={formatBdt(numericAmount)}
+                  tone="strong"
+                  showDivider
+                />
+                <SummaryRow
+                  label="Balance after"
+                  value={formatBdt(Math.max(0, userBalance - numericAmount), true)}
+                  tone="discount"
+                />
+              </View>
+
+              {pinError ? (
+                <NoticeCard tone="danger" title="PIN verification error" message={pinError} />
+              ) : null}
+
+              <View style={styles.pinLabelRow}>
+                <Text style={styles.inputLabel}>4-digit PIN</Text>
+                <Pressable
+                  onPress={() => setPinInput('1234')}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Autofill demo PIN 1234"
+                  style={styles.demoPinChip}
+                >
+                  <Text style={styles.demoPinChipText}>Demo PIN: 1234</Text>
+                </Pressable>
+              </View>
+
+              <TextInput
+                value={pinInput}
+                onChangeText={(v) => setPinInput(v.replace(/\D/g, '').slice(0, 4))}
+                placeholder="••••"
+                placeholderTextColor={colors.textFaint}
+                keyboardType="number-pad"
+                maxLength={4}
+                secureTextEntry
+                accessibilityLabel="4-digit security PIN"
+                style={styles.pinInputBox}
+                autoFocus
               />
-              <SummaryRow label="মোট পরিমাণ (Total)" value={formatBdt(numericAmount)} tone="strong" />
-              <SummaryRow
-                label="পরবর্তী ব্যালেন্স (Remaining)"
-                value={formatBdt(Math.max(0, userBalance - numericAmount), true)}
-                tone="discount"
-              />
-            </View>
 
-            {pinError ? (
-              <NoticeCard tone="danger" title="PIN Verification Error" message={pinError} />
-            ) : null}
-
-            <View style={styles.pinLabelRow}>
-              <Text style={styles.inputLabel}>৪-ডিজিট পিন দিন • Enter 4-Digit PIN</Text>
-              <Pressable onPress={() => setPinInput('1234')} style={styles.demoPinChip}>
-                <Text style={styles.demoPinChipText}>⚡ Demo PIN: 1234</Text>
-              </Pressable>
-            </View>
-
-            <TextInput
-              value={pinInput}
-              onChangeText={(v) => setPinInput(v.replace(/\D/g, '').slice(0, 4))}
-              placeholder="• • • •"
-              placeholderTextColor={colors.textFaint}
-              keyboardType="number-pad"
-              maxLength={4}
-              secureTextEntry
-              style={styles.pinInputBox}
-              autoFocus
-            />
-
-            <View style={styles.modalActions}>
-              <Button
-                title="বাতিল • Cancel"
-                variant="secondary"
-                onPress={() => setPinModalOpen(false)}
-                style={{ flex: 1 }}
-              />
-              <Button
-                title="নিশ্চিত করুন • Confirm"
-                onPress={handleConfirmPinRecharge}
-                loading={submitting}
-                style={{ flex: 1, backgroundColor: operator.color }}
-              />
+              <View style={styles.modalActions}>
+                <SecondaryButton
+                  title="Cancel"
+                  onPress={() => setPinModalOpen(false)}
+                  style={{ flex: 1 }}
+                />
+                <PrimaryButton
+                  title="Confirm"
+                  onPress={handleConfirmPinRecharge}
+                  loading={submitting}
+                  style={{ flex: 1 }}
+                />
+              </View>
             </View>
           </View>
-        </View>
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Part 4B: Animated Digital Receipt Modal */}
+      {/* Digital Receipt Modal */}
       <Modal
         visible={Boolean(receipt)}
         transparent
@@ -542,54 +577,69 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
       >
         <View style={styles.modalBackdrop}>
           <Animated.View style={[styles.receiptDialog, { transform: [{ scale: receiptScale }] }]}>
-            <View style={[styles.receiptCheckCircle, { backgroundColor: operator.color }]}>
-              <Text style={styles.receiptCheckMark}>✓</Text>
+            <View style={styles.receiptIconCircle}>
+              <AppIcon name="check" size={22} color={colors.success} />
             </View>
-            <Text style={styles.receiptHeading}>রিচার্জ সফল হয়েছে! • Successful</Text>
+            <Text style={styles.receiptHeading}>Recharge completed</Text>
             <Text style={styles.receiptSubheading}>
-              AllPay BD (অল পে বিডি) ডিজিটাল লেনদেন রিসিট
+              রিচার্জ সফল হয়েছে · Verified digital receipt
             </Text>
 
             {receipt ? (
-              <View style={styles.receiptTable}>
-                <SummaryRow label="TrxID (ট্রানজেকশন আইডি)" value={receipt.trxId} tone="strong" />
-                <SummaryRow label="অপারেটর (Operator)" value={`${operator.name} (${operator.bnName})`} />
-                <SummaryRow label="প্রাপক (Recipient)" value={receipt.targetPhone} />
+              <View style={styles.summaryBox}>
+                <SummaryRow label="Reference" value={receipt.trxId} tone="strong" showDivider />
                 <SummaryRow
-                  label="বিবরণ (Package)"
-                  value={receipt.offerTitle || 'Instant Flexiload'}
+                  label="Operator"
+                  value={`${operator.name} (${operator.bnName})`}
+                  showDivider
                 />
-                <SummaryRow label="পরিমাণ (Amount)" value={formatBdt(receipt.amount)} tone="strong" />
-                <SummaryRow label="পূর্বের ব্যালেন্স (Before)" value={formatBdt(receipt.balanceBefore, true)} tone="muted" />
-                <SummaryRow label="নতুন ব্যালেন্স (New Balance)" value={formatBdt(receipt.balanceAfter, true)} tone="discount" />
+                <SummaryRow label="Recipient" value={receipt.targetPhone} showDivider />
                 <SummaryRow
-                  label="সময় (Timestamp)"
-                  value={new Date(receipt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  label="Package"
+                  value={receipt.offerTitle || 'Flexiload recharge'}
+                  showDivider
+                />
+                <SummaryRow
+                  label="Amount"
+                  value={formatBdt(receipt.amount)}
+                  tone="strong"
+                  showDivider
+                />
+                <SummaryRow
+                  label="New balance"
+                  value={formatBdt(receipt.balanceAfter, true)}
+                  tone="discount"
+                  showDivider
+                />
+                <SummaryRow
+                  label="Time"
+                  value={new Date(receipt.createdAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
                   tone="muted"
                 />
               </View>
             ) : null}
 
             {copiedNotice ? (
-              <Text style={{ color: colors.success, fontSize: 12, fontWeight: '700', marginBottom: spacing.sm }}>
-                ✓ রিসিট শেয়ার / কপি প্রস্তুত হয়েছে!
-              </Text>
+              <Text style={styles.copiedText}>Receipt ready to share</Text>
             ) : null}
 
             <View style={styles.modalActions}>
-              <Button
-                title="Share / Copy Receipt"
-                variant="secondary"
+              <SecondaryButton
+                title="Share"
+                icon="share"
                 onPress={handleShareReceipt}
                 style={{ flex: 1 }}
               />
-              <Button
-                title="হোমে ফিরুন • Home"
+              <PrimaryButton
+                title="Back to Home"
                 onPress={() => {
                   setReceipt(null);
                   router.replace('/home');
                 }}
-                style={{ flex: 1, backgroundColor: operator.color }}
+                style={{ flex: 1 }}
               />
             </View>
           </Animated.View>
@@ -600,271 +650,247 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
 }
 
 const styles = StyleSheet.create({
-  topBar: {
+  operatorIdentityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  balanceChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-  },
-  balanceChipLabel: {
-    fontSize: 11.5,
-    color: colors.textMuted,
-  },
-  balanceChipValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  opSwitchRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  opSwitchChip: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 7,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  opSwitchText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  opHeroBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
+    gap: 12,
+    padding: 14,
     borderRadius: radius.lg,
-    borderWidth: 1.5,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     marginBottom: spacing.md,
   },
-  opHeroCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  operatorSymbol: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  opHeroCircleText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#042F2E',
-  },
-  opHeroTitle: {
-    fontSize: 17,
+  operatorSymbolText: {
+    fontFamily: baseFontFamily,
+    fontSize: 11,
     fontWeight: '800',
+  },
+  operatorIdentityTitle: {
+    fontFamily: baseFontFamily,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '700',
     color: colors.text,
   },
-  opHeroSub: {
-    fontSize: 12,
+  operatorIdentityBn: {
+    fontWeight: '500',
     color: colors.textMuted,
+  },
+  operatorIdentityMeta: {
+    fontFamily: baseFontFamily,
+    fontSize: 11.5,
+    color: colors.textFaint,
     marginTop: 2,
   },
-  rechargeCard: {
-    borderWidth: 1.5,
-    marginBottom: spacing.lg,
+
+  formCard: {
+    marginBottom: 8,
   },
-  cardHeaderRow: {
+  formCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    gap: 8,
+    marginBottom: 14,
   },
-  clearOfferChip: {
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
+  clearOfferBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.xs,
+    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
   },
   clearOfferText: {
+    fontFamily: baseFontFamily,
     fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
+    fontWeight: '600',
+    color: colors.primary,
   },
-  selectedOfferBanner: {
+  selectedOfferSummary: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing.md,
+    gap: 12,
+    padding: 13,
     borderRadius: radius.md,
-    borderWidth: 1.5,
-    marginBottom: spacing.md,
-    gap: spacing.sm,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+    marginBottom: 14,
   },
   selectedOfferTitle: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontFamily: baseFontFamily,
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: '700',
+    color: colors.text,
   },
   selectedOfferMeta: {
+    fontFamily: baseFontFamily,
     fontSize: 11.5,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: 3,
   },
   selectedOfferPrice: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: colors.text,
-  },
-  inputLabel: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 6,
-  },
-  phoneInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  phoneInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 11,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    letterSpacing: 0.5,
-  },
-  myNumberBtn: {
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    paddingHorizontal: spacing.sm + 4,
-    paddingVertical: 11,
-    borderRadius: radius.md,
-  },
-  myNumberBtnText: {
-    fontSize: 11.5,
+    fontFamily: baseFontFamily,
+    fontSize: 17,
     fontWeight: '800',
     color: colors.primary,
   },
+
+  inputLabel: {
+    fontFamily: baseFontFamily,
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: '#DCE6F2',
+    marginBottom: 6,
+  },
+  phoneInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  phoneInputBox: {
+    flex: 1,
+    minHeight: 46,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+    justifyContent: 'center',
+  },
+  inputBoxFocused: {
+    borderColor: colors.primary,
+    backgroundColor: '#152236',
+  },
+  phoneInput: {
+    fontFamily: baseFontFamily,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+    letterSpacing: 0.4,
+  },
+  myNumberBtn: {
+    minHeight: 46,
+    paddingHorizontal: 13,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  myNumberBtnText: {
+    fontFamily: baseFontFamily,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+
   mnpRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
+    gap: 9,
+    marginTop: 11,
+    paddingVertical: 3,
   },
   checkbox: {
     width: 18,
     height: 18,
-    borderRadius: 4,
+    borderRadius: 5,
     borderWidth: 1.5,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceSecondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkmark: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#042F2E',
+  checkboxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   mnpText: {
+    fontFamily: baseFontFamily,
     fontSize: 11.5,
+    lineHeight: 16,
     color: colors.textMuted,
     flex: 1,
   },
+
   quickChipsRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    gap: 8,
+    marginBottom: 10,
   },
   amountChip: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: radius.md,
+    minHeight: 40,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surfaceSecondary,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  amountChipActive: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
   },
   amountChipText: {
-    fontSize: 13.5,
+    fontFamily: baseFontFamily,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  amountChipTextActive: {
+    color: colors.primary,
     fontWeight: '700',
-    color: colors.text,
+  },
+
+  amountInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 46,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+    paddingHorizontal: 14,
+  },
+  amountCurrencyPrefix: {
+    fontFamily: baseFontFamily,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textMuted,
+    marginRight: 6,
   },
   amountInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: spacing.md,
+    flex: 1,
+    fontFamily: baseFontFamily,
     paddingVertical: 11,
-    fontSize: 17,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  offerList: {
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
-  },
-  offerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  offerBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: 6,
-  },
-  offerValidity: {
-    fontSize: 11.5,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
-  offerTitle: {
-    fontSize: 14.5,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.text,
   },
-  offerRightCol: {
-    alignItems: 'flex-end',
-    gap: 6,
+
+  offersSection: {
+    marginTop: 24,
   },
-  offerPrice: {
-    fontSize: 17,
-    fontWeight: '900',
+  offerList: {
+    gap: 10,
   },
-  buyNowPill: {
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-  },
-  buyNowPillText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.text,
-  },
+
   modalBackdrop: {
     flex: 1,
     backgroundColor: colors.overlay,
@@ -877,29 +903,26 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    padding: 20,
   },
   modalHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  closeBtnText: {
-    fontSize: 18,
-    color: colors.textMuted,
-    fontWeight: '800',
-    padding: 4,
+    gap: 8,
+    marginBottom: 14,
   },
   summaryBox: {
-    backgroundColor: colors.surfaceElevated,
+    width: '100%',
+    backgroundColor: colors.surfaceSecondary,
     borderRadius: radius.md,
-    padding: spacing.md,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: spacing.md,
+    marginBottom: 14,
   },
   pinLabelRow: {
     flexDirection: 'row',
@@ -908,79 +931,76 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   demoPinChip: {
-    backgroundColor: 'rgba(20, 184, 166, 0.16)',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: radius.xs,
+    backgroundColor: colors.primarySoft,
     borderWidth: 1,
-    borderColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
+    borderColor: colors.primaryBorder,
   },
   demoPinChipText: {
+    fontFamily: baseFontFamily,
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
     color: colors.primary,
   },
   pinInputBox: {
-    borderWidth: 1.5,
-    borderColor: colors.primary,
+    fontFamily: baseFontFamily,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surfaceSecondary,
     paddingVertical: 12,
-    fontSize: 24,
-    fontWeight: '900',
+    fontSize: 22,
+    fontWeight: '800',
     color: colors.text,
     textAlign: 'center',
-    letterSpacing: 12,
-    marginBottom: spacing.lg,
+    letterSpacing: 10,
+    marginBottom: 16,
   },
   modalActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: 10,
+    width: '100%',
   },
+
   receiptDialog: {
     width: '100%',
     maxWidth: 400,
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    padding: 22,
     alignItems: 'center',
   },
-  receiptCheckCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  receiptIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.successSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(53, 201, 148, 0.30)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  receiptCheckMark: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: '#042F2E',
+    marginBottom: 12,
   },
   receiptHeading: {
-    fontSize: 19,
-    fontWeight: '800',
-    color: colors.text,
+    ...type.h2,
     textAlign: 'center',
   },
   receiptSubheading: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
-    marginBottom: spacing.md,
+    ...type.caption,
     textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 16,
   },
-  receiptTable: {
-    width: '100%',
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.md,
+  copiedText: {
+    fontFamily: baseFontFamily,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.success,
+    marginBottom: 12,
   },
 });
 

@@ -1,11 +1,7 @@
 /**
- * AllPay BD (অল পে বিডি) Bottom Navigation Bar — 4 Persistent Tabs:
- * 1. Home (হোম)
- * 2. Offers (অফার)
- * 3. History (হিস্ট্রি)
- * 4. Profile (প্রোফাইল)
+ * AllPay BD Integrated Bottom Navigation Bar
+ * Four destinations: Home, Offers, History, Profile.
  */
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { router, usePathname } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import mediumWeight from 'expo-symbols/androidWeights/medium';
@@ -13,12 +9,11 @@ import * as React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, makeShadow, radius, spacing } from '@/theme/tokens';
-import { CUSTOMER_DOCK_BOTTOM_GAP, CUSTOMER_DOCK_HEIGHT } from './customer-dock-inset';
+import { baseFontFamily, colors } from '@/theme/tokens';
 
-const DOCK_MAX_WIDTH = 430;
-const ICON_SIZE = 20;
-const MIN_TOUCH_TARGET = 44;
+const ICON_SIZE = 19;
+const MIN_TOUCH_TARGET = 46;
+const IDLE_COLOR = '#8494AA';
 
 const ICON_WEIGHT = { ios: 'medium' as const, android: mediumWeight };
 
@@ -27,13 +22,13 @@ type DockHref = '/home' | '/offers' | '/transactions' | '/settings';
 type DockTab = {
   key: 'home' | 'offers' | 'transactions' | 'settings';
   label: string;
-  bnLabel: string;
+  accessibilityName: string;
   href: DockHref;
   match: (pathname: string) => boolean;
   icon: {
-    ios: 'house.fill' | 'sparkles' | 'clock.fill' | 'person.fill';
-    android: 'home' | 'local_offer' | 'history' | 'person';
-    web: 'home' | 'local_offer' | 'history' | 'person';
+    ios: 'house' | 'sparkles' | 'clock' | 'person';
+    android: 'home' | 'auto_awesome' | 'schedule' | 'person';
+    web: 'home' | 'auto_awesome' | 'schedule' | 'person';
   };
 };
 
@@ -41,158 +36,153 @@ const TABS: readonly DockTab[] = [
   {
     key: 'home',
     label: 'Home',
-    bnLabel: 'হোম',
+    accessibilityName: 'Home',
     href: '/home',
     match: (p) => p === '/home' || p.startsWith('/operator') || p === '/add-money',
-    icon: { ios: 'house.fill', android: 'home', web: 'home' },
+    icon: { ios: 'house', android: 'home', web: 'home' },
   },
   {
     key: 'offers',
     label: 'Offers',
-    bnLabel: 'অফার',
+    accessibilityName: 'Offers',
     href: '/offers',
     match: (p) => p === '/offers',
-    icon: { ios: 'sparkles', android: 'local_offer', web: 'local_offer' },
+    icon: { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' },
   },
   {
     key: 'transactions',
     label: 'History',
-    bnLabel: 'হিস্ট্রি',
+    accessibilityName: 'Transaction history',
     href: '/transactions',
     match: (p) => p === '/transactions',
-    icon: { ios: 'clock.fill', android: 'history', web: 'history' },
+    icon: { ios: 'clock', android: 'schedule', web: 'schedule' },
   },
   {
     key: 'settings',
     label: 'Profile',
-    bnLabel: 'প্রোফাইল',
+    accessibilityName: 'Profile and settings',
     href: '/settings',
     match: (p) => p === '/settings' || p === '/notifications',
-    icon: { ios: 'person.fill', android: 'person', web: 'person' },
+    icon: { ios: 'person', android: 'person', web: 'person' },
   },
 ];
 
 type BlurStyle = ViewStyle & { backdropFilter?: string; WebkitBackdropFilter?: string };
 
-const NATIVE_GLASS_AVAILABLE = isLiquidGlassAvailable();
-
 const WEB_BACKDROP_BLUR: BlurStyle | null =
   Platform.OS === 'web'
     ? {
-        backdropFilter: 'blur(24px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+        backdropFilter: 'blur(18px)',
+        WebkitBackdropFilter: 'blur(18px)',
       }
     : null;
 
-export function SellerBottomDock(): React.JSX.Element {
+export function BottomNavigation(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  const bottomPad = Math.max(10, insets.bottom);
 
-  const items = (
-    <View style={styles.row}>
+  return (
+    <View
+      accessibilityRole="tablist"
+      style={[
+        styles.bar,
+        WEB_BACKDROP_BLUR,
+        { paddingBottom: bottomPad },
+      ]}
+    >
       {TABS.map((tab) => {
         const active = tab.match(pathname);
+        const tint = active ? colors.primary : IDLE_COLOR;
         return (
           <Pressable
             key={tab.key}
             onPress={() => {
               if (pathname !== tab.href) router.navigate(tab.href);
             }}
-            accessibilityRole="button"
-            accessibilityLabel={`${tab.label} (${tab.bnLabel})`}
+            accessibilityRole="tab"
+            accessibilityLabel={tab.accessibilityName}
             accessibilityState={{ selected: active }}
-            aria-selected={active}
-            style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+            style={({ pressed }) => [
+              styles.item,
+              active && styles.itemActive,
+              pressed && styles.itemPressed,
+            ]}
           >
-            <View style={[styles.itemInner, active && styles.itemInnerActive]}>
-              <View style={styles.iconSlot}>
-                <SymbolView
-                  name={tab.icon}
-                  size={ICON_SIZE}
-                  weight={ICON_WEIGHT}
-                  tintColor={active ? colors.primary : colors.textMuted}
-                />
-              </View>
-              <Text numberOfLines={1} style={[styles.label, active ? styles.labelActive : styles.labelIdle]}>
-                {tab.label} • {tab.bnLabel}
-              </Text>
+            <View style={styles.iconSlot}>
+              <SymbolView
+                name={tab.icon}
+                size={ICON_SIZE}
+                weight={ICON_WEIGHT}
+                tintColor={tint}
+              />
             </View>
+            <Text
+              numberOfLines={1}
+              style={[styles.label, active ? styles.labelActive : styles.labelIdle]}
+            >
+              {tab.label}
+            </Text>
           </Pressable>
         );
       })}
     </View>
   );
-
-  const surfaceStyle = [
-    styles.surface,
-    NATIVE_GLASS_AVAILABLE ? null : styles.surfaceFallback,
-    WEB_BACKDROP_BLUR,
-    makeShadow(3),
-  ];
-
-  return (
-    <View pointerEvents="box-none" style={[styles.dock, { bottom: insets.bottom + CUSTOMER_DOCK_BOTTOM_GAP }]}>
-      {NATIVE_GLASS_AVAILABLE ? (
-        <GlassView glassEffectStyle="regular" isInteractive tintColor="rgba(15, 23, 42, 0.88)" style={surfaceStyle}>
-          {items}
-        </GlassView>
-      ) : (
-        <View style={surfaceStyle}>{items}</View>
-      )}
-    </View>
-  );
 }
 
+/** Backwards-compatible alias for layout shells. */
+export const SellerBottomDock = BottomNavigation;
+
 const styles = StyleSheet.create({
-  dock: {
+  bar: {
     position: 'absolute',
     left: 0,
     right: 0,
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  surface: {
-    maxWidth: DOCK_MAX_WIDTH,
-    width: '100%',
-    borderRadius: radius.pill,
-    overflow: 'hidden',
-  },
-  surfaceFallback: {
-    backgroundColor: 'rgba(15, 23, 42, 0.96)',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  row: {
+    bottom: 0,
+    zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    height: CUSTOMER_DOCK_HEIGHT,
-    paddingHorizontal: spacing.xs,
+    gap: 4,
+    paddingTop: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(13, 21, 36, 0.95)',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   item: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    minWidth: 0,
     minHeight: MIN_TOUCH_TARGET,
-    borderRadius: radius.pill,
-  },
-  itemPressed: { opacity: 0.7 },
-  itemInner: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xs + 2,
-    borderRadius: radius.pill,
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 12,
   },
-  itemInnerActive: {
-    backgroundColor: 'rgba(20, 184, 166, 0.16)',
+  itemActive: {
+    backgroundColor: 'rgba(34, 199, 182, 0.09)',
   },
-  iconSlot: { width: ICON_SIZE, height: ICON_SIZE, alignItems: 'center', justifyContent: 'center' },
+  itemPressed: {
+    opacity: 0.78,
+  },
+  iconSlot: {
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   label: {
+    fontFamily: baseFontFamily,
     fontSize: 10.5,
     lineHeight: 13,
-    fontWeight: '700',
-    marginTop: 2,
+    fontWeight: '600',
   },
-  labelActive: { color: colors.primary },
-  labelIdle: { color: colors.textMuted },
+  labelActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  labelIdle: {
+    color: IDLE_COLOR,
+  },
 });

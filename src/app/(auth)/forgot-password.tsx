@@ -1,32 +1,13 @@
-/**
- * Forgot password (M8).
- *
- * Real recovery, in two steps, through `authService` — the screen never learns
- * which implementation is behind it and never touches a repository:
- *
- *   1. `requestPasswordReset(email)` — the server mails a single-use link. It
- *      answers the same way for an unknown address, so this step always advances
- *      and the wording below is deliberately identical either way. The old demo
- *      asked `emailExists` first and refused unknown addresses on screen, which
- *      turned the form into an account-enumeration oracle.
- *   2. `confirmPasswordReset(token, newPassword)` — the token from that link
- *      proves the mailbox is reachable, and the server invalidates every session
- *      once it succeeds.
- *
- * With no API configured the on-device service has no mail transport, so it
- * returns the token directly and it is shown as a clearly-labelled demo
- * affordance rather than pretending a message was sent.
- */
 import { Redirect, router } from 'expo-router';
 import * as React from 'react';
+import { Text, View } from 'react-native';
 
-import { Text } from 'react-native';
-
-import { Button, Field, Logo, Screen } from '@/components/ui';
+import { PageHeader } from '@/components/fintech-ui';
+import { Card, FormField, Logo, NoticeCard, PrimaryButton, Screen } from '@/components/ui';
 import { ResetConfirm } from '@/modules/auth/reset-confirm';
-import { authService } from '@/services/auth-gateway';
 import { useSession } from '@/modules/session/session-context';
-import { colors, type } from '@/theme/tokens';
+import { authService } from '@/services/auth-gateway';
+import { colors, spacing, type } from '@/theme/tokens';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -34,7 +15,6 @@ export default function ForgotPasswordScreen(): React.JSX.Element {
   const { status } = useSession();
   const [step, setStep] = React.useState<'email' | 'token' | 'success'>('email');
   const [email, setEmail] = React.useState('');
-  /** Only set by the on-device service; see the note above. */
   const [localToken, setLocalToken] = React.useState<string | null>(null);
   const [formError, setFormError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
@@ -59,41 +39,69 @@ export default function ForgotPasswordScreen(): React.JSX.Element {
 
   return (
     <Screen padded>
-      <Logo size={56} />
+      <View style={{ marginBottom: spacing.lg }}>
+        <Logo size={46} />
+      </View>
+
+      <PageHeader
+        backFallbackHref="/login"
+        title={
+          step === 'email'
+            ? 'Forgot password'
+            : step === 'token'
+              ? 'Check your inbox'
+              : 'Password updated'
+        }
+        subtitle={
+          step === 'email'
+            ? "Enter your email and we'll send a single-use reset link."
+            : step === 'token'
+              ? localToken
+                ? 'Enter a new password below to complete recovery.'
+                : `Paste the reset token sent to ${email.trim()}.`
+              : 'Your password has been updated and other sessions have been signed out.'
+        }
+      />
+
       {step === 'email' ? (
-        <>
-          <Text style={{ ...type.h2, ...{ marginBottom: 4  } }}>Forgot password</Text>
-          <Text style={{ ...type.h3, ...{ marginBottom: 20, color: colors.textMuted  } }}>
-            Enter your email and {"we'll"} send a reset link.
-          </Text>
-          <Field label="Email" keyboardType="email-address" value={email} onChangeText={setEmail} error={formError} />
-          <Button title="Send Reset Link" onPress={requestLink} loading={submitting} fullWidth />
-        </>
+        <Card>
+          <FormField
+            label="Email address"
+            keyboardType="email-address"
+            placeholder="you@example.com"
+            value={email}
+            onChangeText={setEmail}
+            error={formError}
+          />
+          <PrimaryButton
+            title="Send reset link"
+            onPress={requestLink}
+            loading={submitting}
+            fullWidth
+          />
+        </Card>
       ) : step === 'token' ? (
-        <>
+        <Card>
           {localToken ? (
-            <Text style={{ ...type.h3, ...{ marginBottom: 20, color: colors.primary  } }}>
-              No mail service is configured, so here is the token for this device: {localToken}
-            </Text>
+            <NoticeCard
+              tone="neutral"
+              title="Preview reset token"
+              message={`Local device token: ${localToken}`}
+            />
           ) : null}
           <ResetConfirm
-            heading="Check your inbox"
-            subheading={
-              localToken
-                ? 'Enter a new password to finish.'
-                : `Open the link we sent to ${email.trim()} and paste its token below.`
-            }
+            heading="Choose a new password"
+            subheading="Enter at least 8 characters."
             onDone={() => setStep('success')}
           />
-        </>
+        </Card>
       ) : (
-        <>
-          <Text style={{ ...type.h2, ...{ marginBottom: 4  } }}>Password reset</Text>
-          <Text style={{ ...type.h3, ...{ marginBottom: 20, color: colors.textMuted  } }}>
-            Your password has been updated and every other session has been signed out.
+        <Card>
+          <Text style={{ ...type.bodyMuted, color: colors.textMuted, marginBottom: spacing.lg }}>
+            You can now sign in with your updated password.
           </Text>
-          <Button title="Sign In" onPress={() => router.replace('/login')} fullWidth />
-        </>
+          <PrimaryButton title="Sign in" onPress={() => router.replace('/login')} fullWidth />
+        </Card>
       )}
     </Screen>
   );

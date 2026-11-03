@@ -7,6 +7,7 @@
     "icon": "./assets/images/allpay-logo.jpeg",
     "scheme": "allpay",
     "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B1120",
     "ios": {
       "bundleIdentifier": "com.allpaybd.app"
     },
@@ -14,7 +15,7 @@
       "icon": "./assets/images/allpay-logo.jpeg",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/allpay-logo.jpeg",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#0B1120"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.allpaybd.app"
@@ -28,7 +29,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#000000",
+          "backgroundColor": "#0B1120",
           "image": "./assets/images/allpay-logo.jpeg",
           "imageWidth": 200
         }

@@ -9,15 +9,24 @@ import {
 } from 'react-native';
 
 import { vantaApi } from '@/api/vanta-api';
-import { AvatarImage, Button, Card, Field, Logo, NoticeCard, Screen } from '@/components/ui';
-import { useSession } from '@/modules/session/session-context';
+import {
+  AppIcon,
+  AvatarImage,
+  Card,
+  FormField,
+  Logo,
+  NoticeCard,
+  PrimaryButton,
+  Screen,
+} from '@/components/ui';
 import {
   authRedirectTarget,
   hasAuthRedirectTarget,
   resumeAfterAuth,
 } from '@/modules/session/route-guard';
+import { useSession } from '@/modules/session/session-context';
 import { mediaService } from '@/services/media-service';
-import { colors, radius, spacing, type } from '@/theme/tokens';
+import { baseFontFamily, colors, radius, spacing, type } from '@/theme/tokens';
 
 const BD_PHONE_RE = /^01[3-9]\d{8}$/;
 const NID_RE = /^(\d{10}|\d{13}|\d{17})$/;
@@ -25,13 +34,17 @@ const PIN_RE = /^\d{4}$/;
 
 function AuthResumeGate(): React.JSX.Element {
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-      <ActivityIndicator size="large" color={colors.primary} accessibilityLabel="Returning to your screen" />
+    <View style={styles.resumeGate}>
+      <ActivityIndicator size="large" color={colors.primary} accessibilityLabel="Signing in" />
     </View>
   );
 }
 
-export function UnifiedAuthScreen({ initialMode = 'login' }: { initialMode?: 'login' | 'register' }): React.JSX.Element {
+export function UnifiedAuthScreen({
+  initialMode = 'login',
+}: {
+  initialMode?: 'login' | 'register';
+}): React.JSX.Element {
   const { status, signIn, signUp } = useSession();
   const router = useRouter();
   const params = useLocalSearchParams<{ next?: string | string[]; mode?: string }>();
@@ -81,7 +94,6 @@ export function UnifiedAuthScreen({ initialMode = 'login' }: { initialMode?: 'lo
       const uploaded = await vantaApi.uploadAvatar(pick.uri, { authenticated: false });
       setAvatarUrl(uploaded.avatarUrl);
     } catch {
-      // Fallback to local URI if offline or Cloudinary not configured
       setAvatarUrl(pick.uri);
     } finally {
       setUploadingAvatar(false);
@@ -94,14 +106,14 @@ export function UnifiedAuthScreen({ initialMode = 'login' }: { initialMode?: 'lo
     const cleanPhone = loginPhone.trim();
 
     if (!cleanPhone) {
-      errs.loginPhone = 'মোবাইল নম্বর দিন • Mobile number is required.';
+      errs.loginPhone = 'মোবাইল নম্বর দিন · Mobile number is required.';
     } else if (!BD_PHONE_RE.test(cleanPhone) && !cleanPhone.includes('@')) {
-      errs.loginPhone = 'সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (01XXXXXXXXX)';
+      errs.loginPhone = 'সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (01XXXXXXXXX).';
     }
     if (!loginPassword) {
-      errs.loginPassword = 'পাসওয়ার্ড দিন • Password is required.';
+      errs.loginPassword = 'পাসওয়ার্ড দিন · Password is required.';
     } else if (loginPassword.length < 6) {
-      errs.loginPassword = 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।';
+      errs.loginPassword = 'Password must be at least 6 characters.';
     }
 
     setFieldError(errs);
@@ -127,22 +139,22 @@ export function UnifiedAuthScreen({ initialMode = 'login' }: { initialMode?: 'lo
     const cleanPin = pin.trim();
 
     if (cleanName.length < 2 || cleanName.length > 60) {
-      errs.name = 'আপনার পূর্ণ নাম লিখুন (২-৬০ অক্ষর) • Enter your full name.';
+      errs.name = 'আপনার পূর্ণ নাম লিখুন · Enter your full name (2–60 chars).';
     }
     if (!NID_RE.test(cleanNid)) {
-      errs.nid = 'সঠিক ১০, ১৩ অথবা ১৭ ডিজিটের NID নম্বর দিন • Valid 10/13/17-digit NID required.';
+      errs.nid = 'Enter a valid 10, 13, or 17-digit NID number.';
     }
     if (!BD_PHONE_RE.test(cleanPhone)) {
-      errs.phone = 'সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (01XXXXXXXXX)';
+      errs.phone = 'সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (01XXXXXXXXX).';
     }
     if (password.length < 6) {
-      errs.password = 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে • At least 6 characters.';
+      errs.password = 'Password must be at least 6 characters.';
     }
     if (confirmPassword !== password) {
-      errs.confirmPassword = 'পাসওয়ার্ড দুটি মিলছে না • Passwords do not match.';
+      errs.confirmPassword = 'Passwords do not match.';
     }
     if (!PIN_RE.test(cleanPin)) {
-      errs.pin = '৪ ডিজিটের গোপন পিন দিন • Enter a 4-digit numeric PIN.';
+      errs.pin = 'Enter a 4-digit numeric security PIN.';
     }
 
     setFieldError(errs);
@@ -176,14 +188,19 @@ export function UnifiedAuthScreen({ initialMode = 'login' }: { initialMode?: 'lo
   return (
     <Screen padded>
       <View style={styles.brandHeader}>
-        <Logo size={58} />
-        <Text style={styles.subtitle}>
-          বাংলাদেশের দ্রুততম ফ্লেক্সিলোড, ইন্টারনেট বান্ডেল এবং ডিজিটাল ওয়ালেট প্ল্যাটফর্ম
+        <Logo size={46} />
+        <Text style={styles.welcomeTitle}>
+          {mode === 'login' ? 'Sign in to your wallet' : 'Create your AllPay account'}
+        </Text>
+        <Text style={styles.welcomeSubtitle}>
+          {mode === 'login'
+            ? 'মোবাইল নম্বর ও পাসওয়ার্ড দিয়ে নিরাপদে লগইন করুন'
+            : 'এনআইডি ও ৪-ডিজিট পিন দিয়ে নতুন ডিজিটাল ওয়ালেট খুলুন'}
         </Text>
       </View>
 
       {/* Segmented Mode Switch */}
-      <View style={styles.segmentContainer}>
+      <View accessibilityRole="tablist" style={styles.segmentContainer}>
         <Pressable
           onPress={() => {
             setMode('login');
@@ -195,7 +212,7 @@ export function UnifiedAuthScreen({ initialMode = 'login' }: { initialMode?: 'lo
           style={[styles.segmentBtn, mode === 'login' && styles.segmentBtnActive]}
         >
           <Text style={[styles.segmentLabel, mode === 'login' && styles.segmentLabelActive]}>
-            লগইন • Login
+            Sign in · লগইন
           </Text>
         </Pressable>
         <Pressable
@@ -209,7 +226,7 @@ export function UnifiedAuthScreen({ initialMode = 'login' }: { initialMode?: 'lo
           style={[styles.segmentBtn, mode === 'register' && styles.segmentBtnActive]}
         >
           <Text style={[styles.segmentLabel, mode === 'register' && styles.segmentLabelActive]}>
-            রেজিস্ট্রেশন • Register
+            Register · নিবন্ধন
           </Text>
         </Pressable>
       </View>
@@ -217,7 +234,7 @@ export function UnifiedAuthScreen({ initialMode = 'login' }: { initialMode?: 'lo
       {formError ? (
         <NoticeCard
           tone="danger"
-          title="Authentication Error"
+          title="Authentication error"
           message={formError}
           onDismiss={() => setFormError(null)}
         />
@@ -225,13 +242,8 @@ export function UnifiedAuthScreen({ initialMode = 'login' }: { initialMode?: 'lo
 
       {mode === 'login' ? (
         <Card style={styles.authCard}>
-          <Text style={type.h2}>আপনার অ্যাকাউন্টে লগইন করুন</Text>
-          <Text style={[type.caption, { marginTop: 2, marginBottom: spacing.md }]}>
-            Sign in with your 11-digit BD mobile number and password
-          </Text>
-
-          <Field
-            label="মোবাইল নম্বর • Mobile Number (11 Digits)"
+          <FormField
+            label="Mobile number · মোবাইল নম্বর"
             placeholder="017XXXXXXXX"
             keyboardType="phone-pad"
             maxLength={11}
@@ -239,9 +251,9 @@ export function UnifiedAuthScreen({ initialMode = 'login' }: { initialMode?: 'lo
             onChangeText={(v) => setLoginPhone(v.replace(/\s+/g, ''))}
             error={fieldError.loginPhone}
           />
-          <Field
-            label="পাসওয়ার্ড • Password"
-            placeholder="••••••"
+          <FormField
+            label="Password · পাসওয়ার্ড"
+            placeholder="Enter your password"
             secure
             value={loginPassword}
             onChangeText={setLoginPassword}
@@ -249,74 +261,78 @@ export function UnifiedAuthScreen({ initialMode = 'login' }: { initialMode?: 'lo
             onSubmitEditing={submitLogin}
           />
 
-          <Button
-            title="লগইন করুন • Sign In"
+          <PrimaryButton
+            title="Sign in"
             onPress={submitLogin}
             loading={submitting}
             fullWidth
           />
 
-          {/* One-Tap Demo Customer Helper */}
+          {/* Demo Customer Helper */}
           <View style={styles.demoCard}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.demoTitle}>⚡ ডেমো কাস্টমার অ্যাকাউন্ট (Demo Account)</Text>
-              <Text style={styles.demoMeta}>Phone: 01700000000 • Pass: 123456 • PIN: 1234</Text>
-              <Text style={styles.demoMeta}>Starting Balance: ৳5,450 • ID: AP-100001</Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.demoTitle}>Demo customer account</Text>
+              <Text style={styles.demoMeta}>01700000000 · Pass: 123456 · PIN: 1234</Text>
             </View>
             <Pressable
               onPress={fillDemoCustomer}
               accessibilityRole="button"
-              accessibilityLabel="Fill demo customer credentials"
-              style={({ pressed }) => [styles.demoFillBtn, pressed && { opacity: 0.8 }]}
+              accessibilityLabel="Autofill demo customer credentials"
+              style={({ pressed }) => [styles.demoFillBtn, pressed && { opacity: 0.78 }]}
             >
-              <Text style={styles.demoFillBtnText}>Auto Fill</Text>
+              <Text style={styles.demoFillBtnText}>Autofill</Text>
             </Pressable>
           </View>
         </Card>
       ) : (
         <Card style={styles.authCard}>
-          <Text style={type.h2}>নতুন অল পে বিডি অ্যাকাউন্ট খুলুন</Text>
-          <Text style={[type.caption, { marginTop: 2, marginBottom: spacing.md }]}>
-            Complete your KYC registration with NID & 4-digit security PIN
-          </Text>
-
           {/* Optional Profile Picture Upload */}
           <View style={styles.avatarUploadRow}>
-            <AvatarImage uri={avatarUrl || 'p:👤:allpay'} size={60} cornerRadius={radius.pill} />
-            <View style={{ flex: 1 }}>
-              <Text style={type.label}>প্রোফাইল ছবি • Profile Photo (Optional)</Text>
-              <Text style={type.caption}>Cloudinary secure avatar upload</Text>
+            <AvatarImage
+              uri={avatarUrl || null}
+              name={name || null}
+              size={54}
+              cornerRadius={radius.pill}
+            />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={type.label}>Profile photo (optional)</Text>
+              <Text style={[type.meta, { marginTop: 2 }]}>প্রোফাইল ছবি যুক্ত করুন</Text>
               <Pressable
                 onPress={handlePickAvatar}
                 disabled={uploadingAvatar}
-                style={styles.uploadChip}
+                style={({ pressed }) => [styles.uploadChip, pressed && { opacity: 0.8 }]}
               >
+                <AppIcon name="camera" size={13} color={colors.primary} />
                 <Text style={styles.uploadChipText}>
-                  {uploadingAvatar ? 'আপলোড হচ্ছে...' : avatarUrl ? '✓ ছবি পরিবর্তন করুন' : '+ ছবি নির্বাচন করুন'}
+                  {uploadingAvatar
+                    ? 'Uploading...'
+                    : avatarUrl
+                      ? 'Change photo'
+                      : 'Choose photo'}
                 </Text>
               </Pressable>
             </View>
           </View>
 
-          <Field
-            label="পূর্ণ নাম • Full Name (নাম)"
+          <FormField
+            label="Full name · পূর্ণ নাম"
             placeholder="আপনার পূর্ণ নাম লিখুন"
             value={name}
             onChangeText={setName}
             error={fieldError.name}
           />
-          <Field
-            label="জাতীয় পরিচয়পত্র নম্বর • NID Number (10/13/17 Digits)"
+          <FormField
+            label="National ID (NID) · জাতীয় পরিচয়পত্র"
             placeholder="1995123456789"
             keyboardType="number-pad"
             maxLength={17}
             value={nid}
             onChangeText={(v) => setNid(v.replace(/\D/g, ''))}
             error={fieldError.nid}
-            hint="১০, ১৩ অথবা ১৭ ডিজিটের এনআইডি নম্বর"
+            hint="10, 13, or 17-digit NID number"
           />
-          <Field
-            label="মোবাইল নম্বর • Mobile Number (11 Digits)"
+          <FormField
+            label="Mobile number · মোবাইল নম্বর"
             placeholder="017XXXXXXXX"
             keyboardType="phone-pad"
             maxLength={11}
@@ -324,36 +340,36 @@ export function UnifiedAuthScreen({ initialMode = 'login' }: { initialMode?: 'lo
             onChangeText={(v) => setPhone(v.replace(/\D/g, ''))}
             error={fieldError.phone}
           />
-          <Field
-            label="পাসওয়ার্ড • Password"
-            placeholder="কমপক্ষে ৬ অক্ষর"
+          <FormField
+            label="Password · পাসওয়ার্ড"
+            placeholder="Minimum 6 characters"
             secure
             value={password}
             onChangeText={setPassword}
             error={fieldError.password}
           />
-          <Field
-            label="পাসওয়ার্ড নিশ্চিত করুন • Confirm Password"
-            placeholder="পুনরায় পাসওয়ার্ড দিন"
+          <FormField
+            label="Confirm password · পাসওয়ার্ড নিশ্চিত করুন"
+            placeholder="Re-enter password"
             secure
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             error={fieldError.confirmPassword}
           />
-          <Field
-            label="৪-ডিজিট গোপন পিন • 4-Digit Security PIN (গোপন পিন)"
-            placeholder="•••• (যেমন: 1234)"
+          <FormField
+            label="4-digit PIN · গোপন পিন"
+            placeholder="••••"
             keyboardType="number-pad"
             maxLength={4}
             secure
             value={pin}
             onChangeText={(v) => setPin(v.replace(/\D/g, '').slice(0, 4))}
             error={fieldError.pin}
-            hint="ফ্লেক্সিলোড ও অফার কেনার সময় এই ৪ ডিজিট পিন প্রয়োজন হবে"
+            hint="Used to authorize Flexiload and bundle purchases"
           />
 
-          <Button
-            title="রেজিস্ট্রেশন সম্পন্ন করুন • Create Account"
+          <PrimaryButton
+            title="Create account"
             onPress={submitRegister}
             loading={submitting}
             fullWidth
@@ -369,20 +385,31 @@ export default function LoginScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  brandHeader: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg,
+  resumeGate: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
   },
-  subtitle: {
-    ...type.caption,
+  brandHeader: {
+    marginTop: spacing.xs,
+    marginBottom: 20,
+  },
+  welcomeTitle: {
+    ...type.h1,
+    marginTop: 20,
+  },
+  welcomeSubtitle: {
+    fontFamily: baseFontFamily,
+    fontSize: 13,
+    lineHeight: 19,
     color: colors.textMuted,
-    marginTop: spacing.sm,
-    lineHeight: 18,
+    marginTop: 6,
   },
   segmentContainer: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
-    borderRadius: radius.pill,
+    borderRadius: radius.md,
     padding: 4,
     borderWidth: 1,
     borderColor: colors.border,
@@ -390,8 +417,8 @@ const styles = StyleSheet.create({
   },
   segmentBtn: {
     flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.pill,
+    minHeight: 40,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -399,72 +426,81 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   segmentLabel: {
+    fontFamily: baseFontFamily,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.textMuted,
   },
   segmentLabelActive: {
     color: colors.textInverse,
+    fontWeight: '700',
   },
   authCard: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
     marginBottom: spacing.xl,
   },
   demoCard: {
     marginTop: spacing.lg,
-    padding: spacing.md,
+    padding: 13,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(20, 184, 166, 0.1)',
+    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: 'rgba(20, 184, 166, 0.35)',
+    borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 10,
   },
   demoTitle: {
-    fontSize: 12.5,
+    fontFamily: baseFontFamily,
+    fontSize: 12,
     fontWeight: '700',
-    color: colors.primary,
-    marginBottom: 2,
+    color: colors.text,
   },
   demoMeta: {
-    fontSize: 11.5,
+    fontFamily: baseFontFamily,
+    fontSize: 11,
     color: colors.textMuted,
+    marginTop: 2,
   },
   demoFillBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.xs,
   },
   demoFillBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.textInverse,
+    fontFamily: baseFontFamily,
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: colors.primary,
   },
   avatarUploadRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
+    gap: 12,
+    padding: 13,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: spacing.md,
   },
   uploadChip: {
-    marginTop: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(20, 184, 166, 0.16)',
+    gap: 6,
+    marginTop: 7,
+    backgroundColor: colors.primarySoft,
     borderWidth: 1,
-    borderColor: colors.primary,
-    paddingHorizontal: spacing.sm + 2,
+    borderColor: colors.primaryBorder,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: radius.pill,
+    borderRadius: radius.xs,
   },
   uploadChipText: {
+    fontFamily: baseFontFamily,
     fontSize: 11.5,
     fontWeight: '700',
     color: colors.primary,

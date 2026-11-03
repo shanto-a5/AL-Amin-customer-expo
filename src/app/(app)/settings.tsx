@@ -3,15 +3,20 @@ import * as React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { vantaApi } from '@/api/vanta-api';
+import { PageHeader } from '@/components/fintech-ui';
 import {
+  AppIcon,
   AvatarImage,
   Button,
   Card,
-  Field,
+  FormField,
   NoticeCard,
   Pill,
+  PrimaryButton,
   Screen,
+  SecondaryButton,
   SectionHeader,
+  StatusIndicator,
   SummaryRow,
 } from '@/components/ui';
 import { useFocusRefresh } from '@/modules/navigation/focus-refresh';
@@ -19,22 +24,45 @@ import { useSession } from '@/modules/session/session-context';
 import { authService } from '@/services/auth-gateway';
 import { mediaService } from '@/services/media-service';
 import { notificationService } from '@/services/notification-service';
-import { colors, formatBdt, radius, spacing, type } from '@/theme/tokens';
+import {
+  baseFontFamily,
+  colors,
+  formatBdt,
+  radius,
+  spacing,
+  type,
+} from '@/theme/tokens';
+
+function maskNidValue(nid?: string | null): string {
+  if (!nid) return 'Not provided';
+  const clean = nid.trim();
+  if (clean.length <= 4) return '••••';
+  const visibleTail = clean.slice(-4);
+  return `${'•'.repeat(Math.min(9, clean.length - 4))}${visibleTail}`;
+}
 
 export default function SettingsScreen(): React.JSX.Element {
   const { status, user, signOut, signOutEverywhere, isAdmin, refresh } = useSession();
   const [busy, setBusy] = React.useState(false);
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
-  const [banner, setBanner] = React.useState<{ tone: 'success' | 'danger'; title: string; message: string } | null>(null);
+  const [nidVisible, setNidVisible] = React.useState(false);
 
-  // Change PIN state
+  const [banner, setBanner] = React.useState<{
+    tone: 'success' | 'danger';
+    title: string;
+    message: string;
+  } | null>(null);
+
+  // PIN form state & inline field errors
   const [currentPin, setCurrentPin] = React.useState('');
   const [newPin, setNewPin] = React.useState('');
+  const [pinFieldErrors, setPinFieldErrors] = React.useState<{ current?: string; next?: string }>({});
   const [pinBusy, setPinBusy] = React.useState(false);
 
-  // Change Password state
+  // Password form state & inline field errors
   const [currentPassword, setCurrentPassword] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
+  const [passFieldErrors, setPassFieldErrors] = React.useState<{ current?: string; next?: string }>({});
   const [passBusy, setPassBusy] = React.useState(false);
 
   useFocusRefresh();
@@ -46,7 +74,7 @@ export default function SettingsScreen(): React.JSX.Element {
     const picked = await mediaService.pickImage('avatars');
     if (picked.status === 'cancelled') return;
     if (picked.status === 'unavailable') {
-      setBanner({ tone: 'danger', title: 'Photo Access', message: picked.message });
+      setBanner({ tone: 'danger', title: 'Photo access unavailable', message: picked.message });
       return;
     }
 
@@ -56,13 +84,13 @@ export default function SettingsScreen(): React.JSX.Element {
       await refresh();
       setBanner({
         tone: 'success',
-        title: 'প্রোফাইল ছবি আপডেট হয়েছে',
-        message: 'Your Cloudinary profile picture has been updated.',
+        title: 'Profile photo updated',
+        message: 'আপনার প্রোফাইল ছবি সফলভাবে আপডেট হয়েছে।',
       });
     } catch (error) {
       setBanner({
         tone: 'danger',
-        title: 'Avatar Upload Failed',
+        title: 'Photo upload failed',
         message: error instanceof Error ? error.message : 'Could not upload avatar.',
       });
     } finally {
@@ -72,29 +100,31 @@ export default function SettingsScreen(): React.JSX.Element {
 
   const handleChangePin = async (): Promise<void> => {
     setBanner(null);
-    if (!/^\d{4}$/.test(currentPin.trim()) || !/^\d{4}$/.test(newPin.trim())) {
-      setBanner({
-        tone: 'danger',
-        title: 'পিন যাচাই করুন',
-        message: 'Current PIN and New PIN must both be 4-digit numbers.',
-      });
-      return;
+    const errors: { current?: string; next?: string } = {};
+    if (!/^\d{4}$/.test(currentPin.trim())) {
+      errors.current = 'Enter your current 4-digit PIN.';
     }
+    if (!/^\d{4}$/.test(newPin.trim())) {
+      errors.next = 'Enter a new 4-digit numeric PIN.';
+    }
+    setPinFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     setPinBusy(true);
     try {
       await authService.changePin(currentPin.trim(), newPin.trim());
       setCurrentPin('');
       setNewPin('');
+      setPinFieldErrors({});
       setBanner({
         tone: 'success',
-        title: 'গোপন পিন পরিবর্তন সফল',
+        title: 'PIN updated',
         message: 'আপনার ৪-ডিজিট সিকিউরিটি পিন সফলভাবে আপডেট করা হয়েছে।',
       });
     } catch (error) {
       setBanner({
         tone: 'danger',
-        title: 'PIN Update Error',
+        title: 'Could not update PIN',
         message: error instanceof Error ? error.message : 'Unable to change PIN.',
       });
     } finally {
@@ -105,29 +135,31 @@ export default function SettingsScreen(): React.JSX.Element {
   const handleChangePassword = async (): Promise<void> => {
     if (!user) return;
     setBanner(null);
-    if (!currentPassword || newPassword.length < 6) {
-      setBanner({
-        tone: 'danger',
-        title: 'পাসওয়ার্ড যাচাই করুন',
-        message: 'Current password and a new password (at least 6 characters) are required.',
-      });
-      return;
+    const errors: { current?: string; next?: string } = {};
+    if (!currentPassword) {
+      errors.current = 'Enter your current password.';
     }
+    if (newPassword.length < 6) {
+      errors.next = 'New password must be at least 6 characters.';
+    }
+    setPassFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     setPassBusy(true);
     try {
       await authService.changePassword(user.id, currentPassword, newPassword);
       setCurrentPassword('');
       setNewPassword('');
+      setPassFieldErrors({});
       setBanner({
         tone: 'success',
-        title: 'পাসওয়ার্ড পরিবর্তন সফল',
+        title: 'Password updated',
         message: 'আপনার অ্যাকাউন্ট পাসওয়ার্ড আপডেট হয়েছে।',
       });
     } catch (error) {
       setBanner({
         tone: 'danger',
-        title: 'Password Update Error',
+        title: 'Could not update password',
         message: error instanceof Error ? error.message : 'Unable to change password.',
       });
     } finally {
@@ -173,10 +205,11 @@ export default function SettingsScreen(): React.JSX.Element {
 
   return (
     <Screen padded>
-      <Text style={type.h1}>প্রোফাইল ও নিরাপত্তা • Profile</Text>
-      <Text style={[type.caption, { marginTop: 2, marginBottom: spacing.md }]}>
-        AllPay BD KYC Identity, Cloudinary Avatar & Security PIN Settings
-      </Text>
+      <PageHeader
+        eyebrow="Account & security"
+        title="Profile"
+        subtitle="প্রোফাইল তথ্য, নিরাপত্তা পিন এবং অ্যাকাউন্ট সেটিংস"
+      />
 
       {banner ? (
         <NoticeCard
@@ -189,121 +222,215 @@ export default function SettingsScreen(): React.JSX.Element {
 
       {status === 'signedIn' && user ? (
         <>
-          <Card style={styles.profileCard}>
-            <View style={styles.avatarRow}>
+          {/* 1. Customer Identity & Profile Information */}
+          <Card style={styles.identityCard}>
+            <View style={styles.identityRow}>
               <AvatarImage
-                uri={user.avatarUrl || user.avatar || `p:👤:${user.phone}`}
-                size={68}
+                uri={user.avatarUrl || user.avatar}
+                name={user.name}
+                size={58}
                 cornerRadius={radius.pill}
               />
-              <View style={{ flex: 1 }}>
-                <View style={styles.nameRow}>
-                  <Text style={type.h2}>{user.name}</Text>
-                  <Pill label={isAdmin ? 'ADMIN' : 'VERIFIED'} tone={isAdmin ? 'info' : 'success'} />
+              <View style={styles.identityCopy}>
+                <View style={styles.nameBadgeRow}>
+                  <Text numberOfLines={1} style={styles.identityName}>
+                    {user.name}
+                  </Text>
+                  <StatusIndicator status={isAdmin ? 'ADMIN' : 'VERIFIED'} />
                 </View>
-                <Text style={[type.caption, { marginTop: 2 }]}>Customer ID: {user.customerId || 'AP-100001'}</Text>
+                <Text style={styles.identityPhone}>{user.phone}</Text>
                 <Pressable
                   onPress={handleAvatarChange}
                   disabled={uploadingAvatar}
-                  style={styles.uploadBtn}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Change profile photo"
+                  style={({ pressed }) => [styles.photoActionBtn, pressed && { opacity: 0.78 }]}
                 >
-                  <Text style={styles.uploadBtnText}>
-                    {uploadingAvatar ? 'আপলোড হচ্ছে...' : '📷 প্রোফাইল ছবি পরিবর্তন করুন (Cloudinary)'}
+                  <AppIcon name="camera" size={13} color={colors.primary} />
+                  <Text style={styles.photoActionText}>
+                    {uploadingAvatar ? 'Uploading photo...' : 'Change profile photo'}
                   </Text>
                 </Pressable>
               </View>
             </View>
-
-            <View style={styles.divider} />
-
-            <SummaryRow label="কাস্টমার আইডি (Customer ID)" value={user.customerId || 'AP-100001'} tone="strong" />
-            <SummaryRow label="মোবাইল নম্বর (Mobile)" value={user.phone} />
-            <SummaryRow label="জাতীয় পরিচয়পত্র (NID)" value={user.nid || 'N/A'} />
-            <SummaryRow label="বর্তমান ব্যালেন্স (Wallet Balance)" value={formatBdt(user.balance ?? 0, true)} tone="discount" />
           </Card>
 
-          <SectionHeader title="নোটিফিকেশন • In-App Inbox" caption="Transaction & settlement alerts" />
-          <Card style={{ marginBottom: spacing.lg }}>
-            <View style={styles.notifRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={type.h3}>অ্যাকাউন্ট নোটিফিকেশন</Text>
-                <Text style={type.caption}>
-                  {unread > 0 ? `${unread} টি অপঠিত আপডেট রয়েছে` : 'সকল লেনদেন আপডেট দেখুন'}
+          {/* 2. Customer Account Details */}
+          <View style={styles.sectionBlock}>
+            <SectionHeader
+              title="Account details"
+              caption="কাস্টমার আইডি ও কেওয়াইসি তথ্য"
+            />
+            <Card padded={false} style={styles.rowsContainer}>
+              <SummaryRow
+                label="Customer ID"
+                value={user.customerId || 'AP-100001'}
+                tone="strong"
+                showDivider
+              />
+              <SummaryRow
+                label="Mobile number"
+                value={user.phone}
+                showDivider
+              />
+              <SummaryRow
+                label="National ID (NID)"
+                value={nidVisible ? user.nid || 'Not provided' : maskNidValue(user.nid)}
+                actionLabel={user.nid ? (nidVisible ? 'Hide' : 'Show') : undefined}
+                onAction={user.nid ? () => setNidVisible((prev) => !prev) : undefined}
+                showDivider
+              />
+              <SummaryRow
+                label="Available balance"
+                value={formatBdt(user.balance ?? 0, true)}
+                tone="discount"
+              />
+            </Card>
+          </View>
+
+          {/* 3. In-App Notifications */}
+          <View style={styles.sectionBlock}>
+            <SectionHeader
+              title="Notifications"
+              caption="লেনদেন ও সিস্টেম নোটিফিকেশন"
+            />
+            <Pressable
+              onPress={() => router.push('/notifications')}
+              accessibilityRole="button"
+              accessibilityLabel={`Open notifications, ${unread} unread`}
+              style={({ pressed }) => [styles.navRowCard, pressed && styles.navRowPressed]}
+            >
+              <View style={styles.navRowIcon}>
+                <AppIcon name="bell" size={18} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.navRowTitle}>In-app notifications</Text>
+                <Text style={styles.navRowSubtitle}>
+                  {unread > 0
+                    ? `${unread} unread update${unread === 1 ? '' : 's'} waiting`
+                    : 'View transaction and settlement alerts'}
                 </Text>
               </View>
-              <Button title={`Inbox (${unread})`} variant="secondary" onPress={() => router.push('/notifications')} />
-            </View>
-          </Card>
+              {unread > 0 ? <Pill label={`${unread} new`} tone="info" /> : null}
+              <AppIcon name="chevronRight" size={16} color={colors.textFaint} />
+            </Pressable>
+          </View>
 
-          {/* Change 4-Digit Security PIN */}
-          <SectionHeader title="গোপন পিন পরিবর্তন • Change 4-Digit PIN" caption="Used for Flexiload & Offer purchases" />
-          <Card style={{ marginBottom: spacing.lg }}>
-            <Field
-              label="বর্তমান ৪-ডিজিট পিন • Current PIN"
-              placeholder="••••"
-              keyboardType="number-pad"
-              maxLength={4}
-              secure
-              value={currentPin}
-              onChangeText={(v) => setCurrentPin(v.replace(/\D/g, '').slice(0, 4))}
+          {/* 4. Security & PIN Management */}
+          <View style={styles.sectionBlock}>
+            <SectionHeader
+              title="Security & PIN"
+              caption="ফ্লেক্সিলোড ও অফার কেনার ৪-ডিজিট পিন পরিবর্তন"
             />
-            <Field
-              label="নতুন ৪-ডিজিট পিন • New 4-Digit PIN"
-              placeholder="••••"
-              keyboardType="number-pad"
-              maxLength={4}
-              secure
-              value={newPin}
-              onChangeText={(v) => setNewPin(v.replace(/\D/g, '').slice(0, 4))}
-            />
-            <Button title="পিন আপডেট করুন • Update PIN" onPress={handleChangePin} loading={pinBusy} fullWidth />
-          </Card>
+            <Card>
+              <FormField
+                label="Current 4-digit PIN · বর্তমান পিন"
+                placeholder="••••"
+                keyboardType="number-pad"
+                maxLength={4}
+                secure
+                value={currentPin}
+                onChangeText={(v) => {
+                  setCurrentPin(v.replace(/\D/g, '').slice(0, 4));
+                  if (pinFieldErrors.current) setPinFieldErrors((p) => ({ ...p, current: undefined }));
+                }}
+                error={pinFieldErrors.current}
+              />
+              <FormField
+                label="New 4-digit PIN · নতুন পিন"
+                placeholder="••••"
+                keyboardType="number-pad"
+                maxLength={4}
+                secure
+                value={newPin}
+                onChangeText={(v) => {
+                  setNewPin(v.replace(/\D/g, '').slice(0, 4));
+                  if (pinFieldErrors.next) setPinFieldErrors((p) => ({ ...p, next: undefined }));
+                }}
+                error={pinFieldErrors.next}
+                hint="Used to authorize Flexiload and bundle purchases"
+              />
+              <PrimaryButton
+                title="Update PIN"
+                icon="lock"
+                onPress={handleChangePin}
+                loading={pinBusy}
+                fullWidth
+              />
+            </Card>
+          </View>
 
-          {/* Change Password */}
-          <SectionHeader title="পাসওয়ার্ড পরিবর্তন • Change Password" caption="Update your sign-in password" />
-          <Card style={{ marginBottom: spacing.lg }}>
-            <Field
-              label="বর্তমান পাসওয়ার্ড • Current Password"
-              placeholder="••••••"
-              secure
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
+          {/* 5. Password Management */}
+          <View style={styles.sectionBlock}>
+            <SectionHeader
+              title="Password"
+              caption="অ্যাকাউন্ট পাসওয়ার্ড পরিবর্তন"
             />
-            <Field
-              label="নতুন পাসওয়ার্ড • New Password"
-              placeholder="কমপক্ষে ৬ অক্ষর"
-              secure
-              value={newPassword}
-              onChangeText={setNewPassword}
-            />
-            <Button
-              title="পাসওয়ার্ড আপডেট করুন • Update Password"
-              variant="secondary"
-              onPress={handleChangePassword}
-              loading={passBusy}
-              fullWidth
-            />
-          </Card>
+            <Card>
+              <FormField
+                label="Current password · বর্তমান পাসওয়ার্ড"
+                placeholder="Enter current password"
+                secure
+                value={currentPassword}
+                onChangeText={(v) => {
+                  setCurrentPassword(v);
+                  if (passFieldErrors.current) setPassFieldErrors((p) => ({ ...p, current: undefined }));
+                }}
+                error={passFieldErrors.current}
+              />
+              <FormField
+                label="New password · নতুন পাসওয়ার্ড"
+                placeholder="Minimum 6 characters"
+                secure
+                value={newPassword}
+                onChangeText={(v) => {
+                  setNewPassword(v);
+                  if (passFieldErrors.next) setPassFieldErrors((p) => ({ ...p, next: undefined }));
+                }}
+                error={passFieldErrors.next}
+                hint="At least 6 characters"
+              />
+              <SecondaryButton
+                title="Update password"
+                icon="key"
+                onPress={handleChangePassword}
+                loading={passBusy}
+                fullWidth
+              />
+            </Card>
+          </View>
 
-          <SectionHeader title="সেশন ও লগআউট • Session Security" />
-          <Card style={{ marginBottom: spacing.xl }}>
-            <Button title="লগআউট করুন • Sign Out" variant="danger" onPress={onSignOut} loading={busy} fullWidth />
-            <View style={{ height: spacing.sm }} />
-            <Button
-              title="সকল ডিভাইস থেকে লগআউট • Sign Out Everywhere"
-              variant="secondary"
-              onPress={onSignOutEverywhere}
-              loading={busy}
-              fullWidth
+          {/* 6. Session & Sign Out */}
+          <View style={styles.sectionBlock}>
+            <SectionHeader
+              title="Session & access"
+              caption="ডিভাইস সেশন ও লগআউট"
             />
-          </Card>
+            <Card style={{ gap: 10 }}>
+              <SecondaryButton
+                title="Sign out from all devices"
+                onPress={onSignOutEverywhere}
+                loading={busy}
+                fullWidth
+              />
+              <Button
+                title="Sign out"
+                variant="danger"
+                icon="logout"
+                onPress={onSignOut}
+                loading={busy}
+                fullWidth
+              />
+            </Card>
+          </View>
         </>
       ) : (
         <Card>
-          <Text style={{ ...type.body, color: colors.textMuted, marginBottom: spacing.md }}>
-            আপনার প্রোফাইল দেখতে লগইন করুন।
+          <Text style={{ ...type.bodyMuted, marginBottom: spacing.md }}>
+            Sign in to view your account details and security settings.
           </Text>
-          <Button title="লগইন করুন • Sign In" onPress={() => router.push('/login')} fullWidth />
+          <PrimaryButton title="Sign in" onPress={() => router.push('/login')} fullWidth />
         </Card>
       )}
     </Screen>
@@ -311,44 +438,100 @@ export default function SettingsScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  profileCard: {
-    marginBottom: spacing.lg,
+  identityCard: {
+    marginBottom: 4,
   },
-  avatarRow: {
+  identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: 14,
   },
-  nameRow: {
+  identityCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nameBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
     flexWrap: 'wrap',
+    gap: 8,
   },
-  uploadBtn: {
-    marginTop: spacing.xs + 2,
+  identityName: {
+    fontFamily: baseFontFamily,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  identityPhone: {
+    fontFamily: baseFontFamily,
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: colors.textMuted,
+    marginTop: 3,
+  },
+  photoActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(20, 184, 166, 0.16)',
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: radius.xs,
+    backgroundColor: colors.primarySoft,
     borderWidth: 1,
-    borderColor: colors.primary,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
+    borderColor: colors.primaryBorder,
   },
-  uploadBtnText: {
+  photoActionText: {
+    fontFamily: baseFontFamily,
     fontSize: 11.5,
     fontWeight: '700',
     color: colors.primary,
   },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.md,
+
+  sectionBlock: {
+    marginTop: 22,
   },
-  notifRow: {
+  rowsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+
+  navRowCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: 12,
+    padding: 15,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  navRowPressed: {
+    backgroundColor: '#142238',
+    borderColor: colors.primaryBorder,
+  },
+  navRowIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navRowTitle: {
+    fontFamily: baseFontFamily,
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  navRowSubtitle: {
+    fontFamily: baseFontFamily,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.textMuted,
+    marginTop: 2,
   },
 });
