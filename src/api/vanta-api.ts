@@ -50,6 +50,7 @@ export interface ApiUser {
   avatar: string;
   avatarUrl: string;
   balance: number;
+  pendingDebit?: number;
   pinLockedUntil?: string | null;
   pendingAddMoney?: TransactionDto[];
   roles: Role[];
@@ -66,16 +67,46 @@ export interface AuthResult {
 
 export interface RechargeReceipt {
   trxId: string;
+  extRefNum?: string | null;
   createdAt: string;
   operator: TelecomOperator;
   targetPhone: string;
   type: 'FLEXILOAD' | 'OFFER_PURCHASE';
   amount: number;
+  status?: TransactionStatus;
   offerTitle: string | null;
   balanceBefore: number;
   balanceAfter: number;
+  idempotentReplay?: boolean;
   transaction: TransactionDto;
   user: ApiUser;
+}
+
+export interface MasterFloatStatus {
+  balance: number;
+  lowFloatThreshold: number;
+  isLowFloat: boolean;
+  pendingDebitTotal: number;
+  pendingDebitCount: number;
+  availableAfterPending: number;
+  inquiryQueueSize: number;
+  updatedAt: string;
+}
+
+export interface ReconciliationSummary {
+  processedRows: number;
+  settledCount: number;
+  refundedCount: number;
+  skippedCount: number;
+  details: {
+    ref: string;
+    trxId?: string;
+    extRefNum?: string;
+    amount?: number;
+    outcome: 'COMPLETED' | 'REFUNDED' | 'SKIPPED';
+    reason?: string;
+  }[];
+  reconciledAt: string;
 }
 
 export interface InitiateAddMoneyResult {
@@ -257,8 +288,42 @@ export class VantaApi {
     pin: string;
     type: 'FLEXILOAD' | 'OFFER_PURCHASE';
     offerId?: string | null;
+    extRefNum?: string;
+    mnpOverride?: boolean;
+    simulateTimeout?: boolean;
   }): Promise<RechargeReceipt> {
     return this.client.post<RechargeReceipt>('/transactions/recharge', input);
+  }
+
+  // --------------------------------------- admin aggregator & reconciliation
+  masterFloat(): Promise<{ masterFloat: MasterFloatStatus }> {
+    return this.client.get('/admin/master-float');
+  }
+
+  topUpMasterFloat(amount: number): Promise<{ masterFloat: MasterFloatStatus }> {
+    return this.client.post('/admin/master-float/top-up', { amount });
+  }
+
+  disputes(): Promise<{ disputes: TransactionDto[]; count: number; masterFloat: MasterFloatStatus }> {
+    return this.client.get('/admin/disputes');
+  }
+
+  resolveDispute(
+    trxIdOrExtRef: string,
+    action: 'COMPLETE' | 'REFUND' | 'INQUIRE',
+    note?: string,
+  ): Promise<{ transaction: TransactionDto; masterFloat: MasterFloatStatus }> {
+    return this.client.post(`/admin/disputes/${encodeURIComponent(trxIdOrExtRef)}/resolve`, {
+      action,
+      note,
+    });
+  }
+
+  reconcileCsv(csvContent: string): Promise<{
+    reconciliation: ReconciliationSummary;
+    masterFloat: MasterFloatStatus;
+  }> {
+    return this.client.post('/admin/reconciliation/csv', { csvContent });
   }
 
   // ------------------------------------------------------- add money & otp

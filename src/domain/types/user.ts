@@ -3,7 +3,7 @@ import type { BaseEntity } from './entity';
 export type Role = 'user' | 'admin';
 
 export type TransactionType = 'FLEXILOAD' | 'OFFER_PURCHASE' | 'ADD_MONEY';
-export type TransactionStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+export type TransactionStatus = 'PENDING' | 'PENDING_DEBIT' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 export type TelecomOperator = 'GP' | 'ROBI' | 'BL' | 'TELETALK';
 export type PaymentGatewayType = 'BKASH' | 'NAGAD' | 'BANK' | 'WALLET';
 export type OfferCategory = 'INTERNET' | 'COMBO' | 'MINUTES';
@@ -25,6 +25,7 @@ export interface OfferDto {
 export interface TransactionDto {
   id: string;
   trxId: string;
+  extRefNum?: string | null;
   userId: string;
   user?: {
     id: string;
@@ -61,6 +62,7 @@ export interface User extends BaseEntity {
   avatar: string;
   avatarUrl: string;
   balance: number;
+  pendingDebit?: number;
   pinLockedUntil?: string | null;
   pendingAddMoney?: TransactionDto[];
   roles: Role[];

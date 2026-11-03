@@ -3,11 +3,13 @@ import * as React from 'react';
 import {
   AccessibilityInfo,
   Animated,
+  Image,
   Keyboard,
   Modal,
   Pressable,
   Share,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableWithoutFeedback,
@@ -31,6 +33,7 @@ import {
   Screen,
   SecondaryButton,
   SectionHeader,
+  StatusIndicator,
   SummaryRow,
 } from '@/components/ui';
 import type { OfferCategory, OfferDto } from '@/domain/types';
@@ -51,6 +54,12 @@ import {
 
 const QUICK_AMOUNTS = [50, 100, 200, 500];
 const BD_PHONE_RE = /^01[3-9]\d{8}$/;
+
+function createClientExtRefNum(operator: OperatorCode): string {
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `EXT-${operator}-${ts}-${rand}`;
+}
 
 function OperatorHubScreen({ session }: { session: SessionContextValue }): React.JSX.Element {
   const params = useLocalSearchParams<{ operatorCode?: string; offerId?: string }>();
@@ -74,6 +83,7 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
   const [pinInput, setPinInput] = React.useState('');
   const [pinError, setPinError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
+  const [pendingExtRefNum, setPendingExtRefNum] = React.useState<string>('');
 
   const [receipt, setReceipt] = React.useState<RechargeReceipt | null>(null);
   const [copiedNotice, setCopiedNotice] = React.useState(false);
@@ -108,12 +118,25 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
   }, [activeOpCode, params.offerId]);
 
   const numericAmount = selectedOffer
-    ? selectedOffer.price
-    : Number.parseFloat(amountInput.replace(/[^\d.]/g, '')) || 0;
+    ? Math.trunc(selectedOffer.price)
+    : Number.parseInt(amountInput.replace(/\D/g, ''), 10) || 0;
+
+  // Detect if the user's exact integer custom amount matches an active bundle denomination
+  const matchedBundleByAmount = React.useMemo(() => {
+    if (selectedOffer || numericAmount <= 0) return null;
+    return offers.find((o) => o.isActive && Math.trunc(o.price) === numericAmount) ?? null;
+  }, [selectedOffer, numericAmount, offers]);
+
+  // Distinct active bundle denominations for quick reference
+  const bundleDenominations = React.useMemo(() => {
+    const prices = Array.from(new Set(offers.filter((o) => o.isActive).map((o) => Math.trunc(o.price))));
+    return prices.sort((a, b) => a - b).slice(0, 5);
+  }, [offers]);
 
   const detectedOp = detectOperatorFromPhone(targetPhone);
-  const prefixMismatch =
-    targetPhone.length >= 3 && detectedOp !== null && detectedOp !== activeOpCode && !mnpOverride;
+  const prefixDiffersFromSelected =
+    targetPhone.length >= 3 && detectedOp !== null && detectedOp !== activeOpCode;
+  const prefixMismatch = prefixDiffersFromSelected && !mnpOverride;
 
   const filteredOffers = React.useMemo(() => {
     if (categoryFilter === 'ALL') return offers;
@@ -128,7 +151,7 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
       return;
     }
     setSelectedOffer(offer);
-    setAmountInput(String(offer.price));
+    setAmountInput(String(Math.trunc(offer.price)));
   };
 
   const handleProceedToPin = () => {
@@ -144,13 +167,13 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
 
     if (prefixMismatch) {
       setFormError(
-        `This number uses a ${OPERATORS[detectedOp!].name} prefix. Enable MNP ported number below if it was ported to ${operator.name}.`,
+        `This number uses a ${OPERATORS[detectedOp!].name} prefix (${cleanPhone.slice(0, 3)}). Toggle "Manual Operator Override (MNP)" below to route it to ${operator.name}, or switch to ${OPERATORS[detectedOp!].name}.`,
       );
       return;
     }
 
-    if (!selectedOffer && (numericAmount < 10 || numericAmount > 10000)) {
-      setFormError('Flexiload amount must be between ৳10 and ৳10,000.');
+    if (!Number.isInteger(numericAmount) || numericAmount < 10 || numericAmount > 10000) {
+      setFormError('Flexiload / bundle amount must be an exact whole integer between ৳10 and ৳10,000.');
       return;
     }
 
@@ -161,6 +184,7 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
       return;
     }
 
+    setPendingExtRefNum(createClientExtRefNum(activeOpCode));
     setPinInput('');
     setPinError(null);
     setPinModalOpen(true);
@@ -174,6 +198,9 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
       return;
     }
 
+    const effectiveOffer = selectedOffer ?? matchedBundleByAmount;
+    const extRefNum = pendingExtRefNum || createClientExtRefNum(activeOpCode);
+
     setSubmitting(true);
     try {
       const result = await vantaApi.recharge({
@@ -181,8 +208,10 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
         targetPhone: targetPhone.trim(),
         amount: numericAmount,
         pin: cleanPin,
-        type: selectedOffer ? 'OFFER_PURCHASE' : 'FLEXILOAD',
-        offerId: selectedOffer ? selectedOffer.id : null,
+        type: effectiveOffer ? 'OFFER_PURCHASE' : 'FLEXILOAD',
+        offerId: effectiveOffer ? effectiveOffer.id : null,
+        extRefNum,
+        mnpOverride: mnpOverride || prefixDiffersFromSelected,
       });
       await session.refresh();
       setPinModalOpen(false);
@@ -214,13 +243,17 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
     const text = [
       'AllPay BD (অল পে বিডি) — Recharge Receipt',
       `Reference: ${receipt.trxId}`,
-      `Operator: ${operator.name} (${operator.bnName})`,
+      receipt.extRefNum ? `Aggregator EXTREFNUM: ${receipt.extRefNum}` : null,
+      `Status: ${receipt.status ?? receipt.transaction?.status ?? 'COMPLETED'}`,
+      `Operator: ${operator.name} (${operator.bnName})${mnpOverride ? ' [MNP Override]' : ''}`,
       `Recipient: ${receipt.targetPhone}`,
       `Package: ${receipt.offerTitle || 'Flexiload Recharge'}`,
       `Amount: ${formatBdt(receipt.amount)}`,
       `New Balance: ${formatBdt(receipt.balanceAfter, true)}`,
       `Time: ${new Date(receipt.createdAt).toLocaleString()}`,
-    ].join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     try {
       await Share.share({ message: text });
@@ -230,6 +263,9 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
     setCopiedNotice(true);
     setTimeout(() => setCopiedNotice(false), 3000);
   };
+
+  const receiptIsPendingDebit =
+    (receipt?.status ?? receipt?.transaction?.status) === 'PENDING_DEBIT';
 
   return (
     <Screen padded>
@@ -253,6 +289,9 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
           setSelectedOffer(null);
           setFormError(null);
           setLoadingOffers(true);
+          if (targetPhone.length >= 3 && detectOperatorFromPhone(targetPhone) !== code) {
+            setMnpOverride(true);
+          }
           router.replace({ pathname: '/operator/[operatorCode]', params: { operatorCode: code } });
         }}
       />
@@ -260,9 +299,7 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
       {/* Restrained Selected Operator Header Row */}
       <View style={styles.operatorIdentityRow}>
         <View style={[styles.operatorSymbol, { backgroundColor: operator.softBg }]}>
-          <Text style={[styles.operatorSymbolText, { color: operator.color }]}>
-            {operator.symbolLabel}
-          </Text>
+          <Image source={operator.logo} style={styles.operatorLogoImg} resizeMode="contain" />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.operatorIdentityTitle}>
@@ -270,6 +307,11 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
           </Text>
           <Text style={styles.operatorIdentityMeta}>{operator.tagline}</Text>
         </View>
+        {mnpOverride ? (
+          <View style={styles.mnpActiveBadge}>
+            <Text style={styles.mnpActiveBadgeText}>MNP OVERRIDE</Text>
+          </View>
+        ) : null}
       </View>
 
       {formError ? (
@@ -277,6 +319,15 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
           tone="danger"
           title="Check recharge details"
           message={formError}
+          actionLabel={prefixMismatch ? `Enable MNP Override for ${operator.name}` : undefined}
+          onAction={
+            prefixMismatch
+              ? () => {
+                  setMnpOverride(true);
+                  setFormError(null);
+                }
+              : undefined
+          }
           onDismiss={() => setFormError(null)}
         />
       ) : null}
@@ -327,8 +378,17 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
             <TextInput
               value={targetPhone}
               onChangeText={(v) => {
-                setTargetPhone(v.replace(/\D/g, '').slice(0, 11));
+                const digits = v.replace(/\D/g, '').slice(0, 11);
+                setTargetPhone(digits);
                 setFormError(null);
+                const autoOp = detectOperatorFromPhone(digits);
+                if (digits.length >= 3 && autoOp && autoOp !== activeOpCode && !mnpOverride) {
+                  // Auto-route to detected operator unless MNP override is enabled
+                  router.replace({
+                    pathname: '/operator/[operatorCode]',
+                    params: { operatorCode: autoOp },
+                  });
+                }
               }}
               onFocus={() => setPhoneFocused(true)}
               onBlur={() => setPhoneFocused(false)}
@@ -355,30 +415,79 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
           ) : null}
         </View>
 
-        {/* MNP Ported Number Toggle */}
-        <Pressable
-          onPress={() => setMnpOverride((prev) => !prev)}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: mnpOverride }}
-          style={styles.mnpRow}
-        >
-          <View style={[styles.checkbox, mnpOverride && styles.checkboxChecked]}>
-            {mnpOverride ? (
-              <AppIcon name="check" size={12} color={colors.textInverse} />
-            ) : null}
+        {/* Manual Operator Override (MNP) Toggle Card */}
+        <View style={[styles.mnpCard, mnpOverride && styles.mnpCardActive]}>
+          <View style={styles.mnpHeaderRow}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.mnpTitle}>Manual Operator Override (MNP)</Text>
+              <Text style={styles.mnpText}>
+                নম্বর পোর্ট (MNP) করা থাকলে প্রিফিক্স লক বাইপাস করে {operator.bnName} নেটওয়ার্কে রিচার্জ করুন
+              </Text>
+            </View>
+            <Switch
+              value={mnpOverride}
+              onValueChange={(val) => {
+                setMnpOverride(val);
+                setFormError(null);
+              }}
+              trackColor={{ false: 'rgba(255,255,255,0.2)', true: colors.primary }}
+              thumbColor="#FFFFFF"
+              accessibilityLabel="Toggle Manual Operator Override for MNP ported numbers"
+            />
           </View>
-          <Text style={styles.mnpText}>
-            MNP ported number (অন্য অপারেটর থেকে {operator.bnName}-এ পোর্টেড)
-          </Text>
-        </Pressable>
 
-        {/* Quick Amount Chips & Custom Amount Input */}
+          {mnpOverride || prefixDiffersFromSelected ? (
+            <View style={styles.mnpOperatorPillsRow}>
+              {OPERATOR_LIST.map((op) => {
+                const selected = op.code === activeOpCode;
+                return (
+                  <Pressable
+                    key={op.code}
+                    onPress={() => {
+                      setMnpOverride(true);
+                      setFormError(null);
+                      if (op.code !== activeOpCode) {
+                        router.replace({
+                          pathname: '/operator/[operatorCode]',
+                          params: { operatorCode: op.code },
+                        });
+                      }
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    style={[
+                      styles.mnpOpPill,
+                      selected && {
+                        borderColor: colors.primary,
+                        backgroundColor: colors.primarySoft,
+                      },
+                    ]}
+                  >
+                    <Image source={op.logo} style={styles.mnpOpLogo} resizeMode="contain" />
+                    <Text
+                      style={[
+                        styles.mnpOpPillText,
+                        selected && { color: colors.primary, fontWeight: '700' },
+                      ]}
+                    >
+                      {op.code}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+
+        {/* Quick Amount Chips & Custom Exact Integer Amount Input */}
         {!selectedOffer ? (
           <View style={{ marginTop: spacing.md }}>
-            <Text style={styles.inputLabel}>Amount · টাকার পরিমাণ (৳10 – ৳10,000)</Text>
+            <Text style={styles.inputLabel}>
+              Exact integer amount · টাকার পরিমাণ (৳10 – ৳10,000)
+            </Text>
             <View style={styles.quickChipsRow}>
               {QUICK_AMOUNTS.map((amt) => {
-                const active = Number(amountInput) === amt;
+                const active = numericAmount === amt;
                 return (
                   <Pressable
                     key={amt}
@@ -394,6 +503,37 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
                 );
               })}
             </View>
+
+            {/* Bundle Denomination Quick Chips */}
+            {bundleDenominations.length > 0 ? (
+              <View style={styles.bundleDenomRow}>
+                <Text style={styles.bundleDenomLabel}>Bundle denominations:</Text>
+                <View style={styles.bundleDenomChipsWrap}>
+                  {bundleDenominations.map((price) => {
+                    const active = numericAmount === price;
+                    return (
+                      <Pressable
+                        key={price}
+                        onPress={() => setAmountInput(String(price))}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Select bundle denomination ${price} Taka`}
+                        style={[styles.bundleDenomChip, active && styles.bundleDenomChipActive]}
+                      >
+                        <Text
+                          style={[
+                            styles.bundleDenomChipText,
+                            active && styles.bundleDenomChipTextActive,
+                          ]}
+                        >
+                          ৳{price}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
             <View
               style={[
                 styles.amountInputBox,
@@ -409,10 +549,33 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
                 placeholder="100"
                 placeholderTextColor={colors.textFaint}
                 keyboardType="number-pad"
-                accessibilityLabel="Recharge amount in Taka"
+                accessibilityLabel="Exact integer recharge amount in Taka"
                 style={styles.amountInput}
               />
             </View>
+
+            {/* Auto-Detected Bundle Denomination Match Banner */}
+            {matchedBundleByAmount ? (
+              <Pressable
+                onPress={() => handleSelectOffer(matchedBundleByAmount)}
+                accessibilityRole="button"
+                accessibilityLabel={`Bundle denomination matched: ${matchedBundleByAmount.title}`}
+                style={styles.matchedBundleBanner}
+              >
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.matchedBundleBadge}>
+                    BUNDLE DENOMINATION MATCHED · ৳{matchedBundleByAmount.price}
+                  </Text>
+                  <Text style={styles.matchedBundleTitle}>{matchedBundleByAmount.title}</Text>
+                  <Text style={styles.matchedBundleSub}>
+                    {matchedBundleByAmount.category} · {matchedBundleByAmount.validity} — will trigger bundle pack automatically
+                  </Text>
+                </View>
+                <View style={styles.matchedBundleSelectPill}>
+                  <Text style={styles.matchedBundleSelectText}>Lock Pack</Text>
+                </View>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
 
@@ -498,15 +661,24 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
               <View style={styles.summaryBox}>
                 <SummaryRow
                   label="Operator"
-                  value={`${operator.name} (${operator.bnName})`}
+                  value={`${operator.name} (${operator.bnName})${mnpOverride ? ' · MNP' : ''}`}
                   showDivider
                 />
                 <SummaryRow label="Recipient" value={targetPhone} showDivider />
                 <SummaryRow
                   label="Service"
-                  value={selectedOffer ? selectedOffer.title : 'Flexiload recharge'}
+                  value={
+                    selectedOffer
+                      ? selectedOffer.title
+                      : matchedBundleByAmount
+                        ? `${matchedBundleByAmount.title} (৳${matchedBundleByAmount.price} Denom)`
+                        : 'Flexiload recharge'
+                  }
                   showDivider
                 />
+                {pendingExtRefNum ? (
+                  <SummaryRow label="EXTREFNUM" value={pendingExtRefNum} tone="muted" showDivider />
+                ) : null}
                 <SummaryRow
                   label="Total amount"
                   value={formatBdt(numericAmount)}
@@ -577,20 +749,50 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
       >
         <View style={styles.modalBackdrop}>
           <Animated.View style={[styles.receiptDialog, { transform: [{ scale: receiptScale }] }]}>
-            <View style={styles.receiptIconCircle}>
-              <AppIcon name="check" size={22} color={colors.success} />
+            <View
+              style={[
+                styles.receiptIconCircle,
+                receiptIsPendingDebit && {
+                  backgroundColor: colors.warningSoft,
+                  borderColor: 'rgba(234, 179, 84, 0.40)',
+                },
+              ]}
+            >
+              <AppIcon
+                name={receiptIsPendingDebit ? 'clock' : 'check'}
+                size={22}
+                color={receiptIsPendingDebit ? colors.warning : colors.success}
+              />
             </View>
-            <Text style={styles.receiptHeading}>Recharge completed</Text>
+            <Text style={styles.receiptHeading}>
+              {receiptIsPendingDebit ? 'Pending Debit Verification' : 'Recharge completed'}
+            </Text>
             <Text style={styles.receiptSubheading}>
-              রিচার্জ সফল হয়েছে · Verified digital receipt
+              {receiptIsPendingDebit
+                ? 'টেলিকম সুইচ থেকে চূড়ান্ত নিশ্চিতকরণের অপেক্ষায় (TXN_STATUS_INQUIRY)'
+                : 'রিচার্জ সফল হয়েছে · Verified digital receipt'}
             </Text>
 
             {receipt ? (
               <View style={styles.summaryBox}>
+                <View style={styles.receiptStatusRow}>
+                  <Text style={styles.receiptStatusLabel}>Ledger Status</Text>
+                  <StatusIndicator
+                    status={receipt.status ?? receipt.transaction?.status ?? 'COMPLETED'}
+                  />
+                </View>
                 <SummaryRow label="Reference" value={receipt.trxId} tone="strong" showDivider />
+                {receipt.extRefNum ? (
+                  <SummaryRow
+                    label="EXTREFNUM"
+                    value={receipt.extRefNum}
+                    tone="muted"
+                    showDivider
+                  />
+                ) : null}
                 <SummaryRow
                   label="Operator"
-                  value={`${operator.name} (${operator.bnName})`}
+                  value={`${operator.name} (${operator.bnName})${mnpOverride ? ' · MNP' : ''}`}
                   showDivider
                 />
                 <SummaryRow label="Recipient" value={receipt.targetPhone} showDivider />
@@ -667,11 +869,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  operatorSymbolText: {
-    fontFamily: baseFontFamily,
-    fontSize: 11,
-    fontWeight: '800',
+  operatorLogoImg: {
+    width: 26,
+    height: 26,
   },
   operatorIdentityTitle: {
     fontFamily: baseFontFamily,
@@ -689,6 +892,21 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: colors.textFaint,
     marginTop: 2,
+  },
+  mnpActiveBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.xs,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+  },
+  mnpActiveBadgeText: {
+    fontFamily: baseFontFamily,
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 0.4,
   },
 
   formCard: {
@@ -752,7 +970,7 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 17,
     fontWeight: '600',
-    color: '#DCE6F2',
+    color: '#FFFFFF',
     marginBottom: 6,
   },
   phoneInputRow: {
@@ -771,7 +989,7 @@ const styles = StyleSheet.create({
   },
   inputBoxFocused: {
     borderColor: colors.primary,
-    backgroundColor: '#152236',
+    backgroundColor: '#000000',
   },
   phoneInput: {
     fontFamily: baseFontFamily,
@@ -799,33 +1017,65 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
 
-  mnpRow: {
+  mnpCard: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceSecondary,
+    gap: 10,
+  },
+  mnpCardActive: {
+    borderColor: colors.primaryBorder,
+    backgroundColor: colors.primarySoft,
+  },
+  mnpHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 9,
-    marginTop: 11,
-    paddingVertical: 3,
+    justifyContent: 'space-between',
+    gap: 10,
   },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surfaceSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+  mnpTitle: {
+    fontFamily: baseFontFamily,
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: colors.text,
   },
   mnpText: {
     fontFamily: baseFontFamily,
-    fontSize: 11.5,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 15,
     color: colors.textMuted,
+    marginTop: 2,
+  },
+  mnpOperatorPillsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingTop: 4,
+  },
+  mnpOpPill: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#000000',
+  },
+  mnpOpLogo: {
+    width: 14,
+    height: 14,
+  },
+  mnpOpPillText: {
+    fontFamily: baseFontFamily,
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
   },
 
   quickChipsRow: {
@@ -858,6 +1108,44 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  bundleDenomRow: {
+    marginBottom: 10,
+    gap: 6,
+  },
+  bundleDenomLabel: {
+    fontFamily: baseFontFamily,
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textFaint,
+  },
+  bundleDenomChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  bundleDenomChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#000000',
+  },
+  bundleDenomChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  bundleDenomChipText: {
+    fontFamily: baseFontFamily,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  bundleDenomChipTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+
   amountInputBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -882,6 +1170,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.text,
+  },
+
+  matchedBundleBanner: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  matchedBundleBadge: {
+    fontFamily: baseFontFamily,
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 0.4,
+  },
+  matchedBundleTitle: {
+    fontFamily: baseFontFamily,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 2,
+  },
+  matchedBundleSub: {
+    fontFamily: baseFontFamily,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  matchedBundleSelectPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.xs,
+    backgroundColor: colors.primary,
+  },
+  matchedBundleSelectText: {
+    fontFamily: baseFontFamily,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#000000',
   },
 
   offersSection: {
@@ -923,6 +1256,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: 14,
+  },
+  receiptStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  receiptStatusLabel: {
+    fontFamily: baseFontFamily,
+    fontSize: 13,
+    color: colors.textMuted,
   },
   pinLabelRow: {
     flexDirection: 'row',

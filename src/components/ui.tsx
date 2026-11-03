@@ -222,6 +222,10 @@ export function SecondaryButton(props: Omit<ButtonProps, 'variant'>): React.JSX.
   return <Button {...props} variant="secondary" />;
 }
 
+export function DangerButton(props: Omit<ButtonProps, 'variant'>): React.JSX.Element {
+  return <Button {...props} variant="danger" />;
+}
+
 // ------------------------------------------------------------------ FormField / Field
 
 export interface FieldProps {
@@ -574,7 +578,7 @@ export function StatusIndicator({
   status,
   label,
 }: {
-  status: 'COMPLETED' | 'PROCESSING' | 'PENDING' | 'FAILED' | 'VERIFIED' | 'ADMIN' | 'ACTIVE' | 'DISABLED';
+  status: 'COMPLETED' | 'PROCESSING' | 'PENDING' | 'PENDING_DEBIT' | 'FAILED' | 'VERIFIED' | 'ADMIN' | 'ACTIVE' | 'DISABLED';
   label?: string;
 }): React.JSX.Element {
   const config: { tone: PillTone; icon: AppIconName; defaultLabel: string } = (() => {
@@ -585,6 +589,8 @@ export function StatusIndicator({
         return { tone: 'success', icon: 'checkCircle', defaultLabel: 'Verified' };
       case 'ACTIVE':
         return { tone: 'success', icon: 'checkCircle', defaultLabel: 'Active' };
+      case 'PENDING_DEBIT':
+        return { tone: 'warning', icon: 'clock', defaultLabel: 'Pending debit' };
       case 'PROCESSING':
       case 'PENDING':
         return { tone: 'warning', icon: 'clock', defaultLabel: status === 'PENDING' ? 'Pending' : 'Processing' };
