@@ -4,7 +4,7 @@
     "slug": "allpay-bd",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/allpay-logo.jpeg",
+    "icon": "./assets/images/allpay-logo.png",
     "scheme": "allpay",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0B1120",
@@ -12,10 +12,10 @@
       "bundleIdentifier": "com.allpaybd.app"
     },
     "android": {
-      "icon": "./assets/images/allpay-logo.jpeg",
+      "icon": "./assets/images/allpay-logo.png",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/allpay-logo.jpeg",
-        "backgroundColor": "#0B1120"
+        "foregroundImage": "./assets/images/allpay-logo.png",
+        "backgroundColor": "#F4F4F4"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.allpaybd.app",
@@ -26,7 +26,7 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/allpay-logo.jpeg"
+      "favicon": "./assets/images/allpay-logo.png"
     },
     "plugins": [
       "expo-router",
@@ -34,7 +34,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#0B1120",
-          "image": "./assets/images/allpay-logo.jpeg",
+          "image": "./assets/images/allpay-logo.png",
           "imageWidth": 200
         }
       ],

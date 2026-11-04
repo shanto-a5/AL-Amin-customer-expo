@@ -3,6 +3,13 @@ const { withAndroidManifest, withMainActivity } = require('@expo/config-plugins'
 function withNotificationChannel(config) {
   // 1. Add meta-data to AndroidManifest.xml
   config = withAndroidManifest(config, (modConfig) => {
+    if (!modConfig.modResults.manifest.$) {
+      modConfig.modResults.manifest.$ = {};
+    }
+    if (!modConfig.modResults.manifest.$['xmlns:tools']) {
+      modConfig.modResults.manifest.$['xmlns:tools'] = 'http://schemas.android.com/tools';
+    }
+
     const mainApplication = modConfig.modResults.manifest.application?.[0];
     if (mainApplication) {
       if (!mainApplication['meta-data']) {
@@ -13,11 +20,13 @@ function withNotificationChannel(config) {
       );
       if (channelMeta) {
         channelMeta.$['android:value'] = 'allpay_default_channel';
+        channelMeta.$['tools:replace'] = 'android:value';
       } else {
         mainApplication['meta-data'].push({
           $: {
             'android:name': 'com.google.firebase.messaging.default_notification_channel_id',
             'android:value': 'allpay_default_channel',
+            'tools:replace': 'android:value',
           },
         });
       }
