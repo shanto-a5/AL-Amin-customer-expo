@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Messaging, RemoteMessage } from '@react-native-firebase/messaging';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Device from 'expo-device';
 import { router } from 'expo-router';
 import { Alert, PermissionsAndroid, Platform } from 'react-native';
@@ -18,8 +19,21 @@ let currentRegisteredFid: string | null = null;
 let currentUser: User | null = null;
 
 // Safe lazy import of @react-native-firebase/messaging to guard against web or environments without native modules
+/**
+ * Native Firebase cannot run in Expo Go (StoreClient) or on web: requiring
+ * @react-native-firebase/app registers a TurboModule at evaluation time and
+ * throws "Native module NativeRNFBTurboApp is not registered". This check must
+ * run BEFORE any require() of the Firebase packages.
+ */
+function isNativeFirebaseSupported(): boolean {
+  if (Platform.OS === 'web') return false;
+  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return false;
+  if (Constants.appOwnership === 'expo') return false;
+  return true;
+}
+
 function getMessagingInstance(): Messaging | null {
-  if (Platform.OS === 'web') return null;
+  if (!isNativeFirebaseSupported()) return null;
   if (!messagingInstance) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -55,7 +69,7 @@ if (messaging) {
  * Request notification permissions (including Android 13+ POST_NOTIFICATIONS).
  */
 export async function requestNotificationPermission(): Promise<boolean> {
-  if (Platform.OS === 'web') return false;
+  if (!isNativeFirebaseSupported()) return false;
 
   try {
     if (Platform.OS === 'android') {
@@ -122,7 +136,7 @@ async function syncFidToBackend(fid: string, user: User | null): Promise<void> {
  * Initialize FCM, FID registration, and message listeners for the customer app.
  */
 export function initFcmManager(): () => void {
-  if (isInitialized || Platform.OS === 'web') {
+  if (isInitialized || !isNativeFirebaseSupported()) {
     return () => {};
   }
 

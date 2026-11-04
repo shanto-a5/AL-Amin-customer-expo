@@ -25,6 +25,7 @@ import {
   resumeAfterAuth,
 } from '@/modules/session/route-guard';
 import { useSession } from '@/modules/session/session-context';
+import { describeAuthError } from '@/services/auth-error';
 import { mediaService } from '@/services/media-service';
 import { baseFontFamily, colors, radius, spacing, type } from '@/theme/tokens';
 
@@ -123,7 +124,14 @@ export function UnifiedAuthScreen({
     try {
       await signIn(cleanPhone, loginPassword);
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Unable to sign in. Try again.');
+      const { banner, fieldErrors } = describeAuthError(error, 'Unable to sign in. Try again.', {
+        phone: 'loginPhone',
+        email: 'loginPhone',
+        identifier: 'loginPhone',
+        password: 'loginPassword',
+      });
+      setFieldError(fieldErrors);
+      setFormError(banner);
     } finally {
       setSubmitting(false);
     }
@@ -171,7 +179,9 @@ export function UnifiedAuthScreen({
         avatarUrl: avatarUrl || undefined,
       });
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Unable to create account.');
+      const { banner, fieldErrors } = describeAuthError(error, 'Unable to create account.');
+      setFieldError(fieldErrors);
+      setFormError(banner);
     } finally {
       setSubmitting(false);
     }

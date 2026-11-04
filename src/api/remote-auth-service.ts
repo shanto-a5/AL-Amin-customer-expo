@@ -30,7 +30,7 @@ export function toDeviceUser(apiUser: ApiUser, pendingAddMoney?: TransactionDto[
 
 function toAuthError(error: unknown): AuthError {
   if (error instanceof AuthError) return error;
-  if (error instanceof ApiError) return new AuthError(error.message, error.field);
+  if (error instanceof ApiError) return new AuthError(error.message, error.field, error.fields);
   if (error instanceof Error) return new AuthError(error.message);
   return new AuthError('Something went wrong. Try again.');
 }
