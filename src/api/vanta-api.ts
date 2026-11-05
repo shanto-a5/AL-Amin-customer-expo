@@ -74,6 +74,8 @@ export interface RechargeReceipt {
   type: 'FLEXILOAD' | 'OFFER_PURCHASE';
   amount: number;
   status?: TransactionStatus;
+  expiresAt?: string | null;
+  completedAt?: string | null;
   offerTitle: string | null;
   balanceBefore: number;
   balanceAfter: number;
@@ -109,32 +111,27 @@ export interface ReconciliationSummary {
   reconciledAt: string;
 }
 
-export interface InitiateAddMoneyResult {
-  sessionId: string;
-  gateway: 'BKASH' | 'NAGAD' | 'BANK';
-  senderNumber: string;
-  amount: number;
-  expiresAt: string;
-  expiresInSeconds: number;
-  resendInSeconds: number;
-  devOtp?: string;
-}
-
-export interface VerifyAddMoneyOtpResult {
+export interface AddMoneyRequestResult {
   transaction: TransactionDto;
   pendingAddMoney: TransactionDto[];
-  scheduledReleaseAt: string;
+  expiresAt: string;
   holdDurationSeconds: number;
   message: string;
   notice: string;
 }
 
-export interface CompleteAddMoneyResult {
-  alreadyCompleted: boolean;
+export interface FulfilmentResult {
+  alreadyCompleted?: boolean;
   transaction: TransactionDto;
-  user: ApiUser | null;
-  pendingAddMoney: TransactionDto[];
-  callerUser: ApiUser | null;
+  user?: ApiUser | null;
+}
+
+export interface AdminPendingQueue {
+  pending: TransactionDto[];
+  recharges: TransactionDto[];
+  addMoney: TransactionDto[];
+  count: number;
+  serverTime: string;
 }
 
 export interface HealthReport {
@@ -290,7 +287,6 @@ export class VantaApi {
     offerId?: string | null;
     extRefNum?: string;
     mnpOverride?: boolean;
-    simulateTimeout?: boolean;
   }): Promise<RechargeReceipt> {
     return this.client.post<RechargeReceipt>('/transactions/recharge', input);
   }
@@ -310,7 +306,7 @@ export class VantaApi {
 
   resolveDispute(
     trxIdOrExtRef: string,
-    action: 'COMPLETE' | 'REFUND' | 'INQUIRE',
+    action: 'COMPLETE' | 'REFUND',
     note?: string,
   ): Promise<{ transaction: TransactionDto; masterFloat: MasterFloatStatus }> {
     return this.client.post(`/admin/disputes/${encodeURIComponent(trxIdOrExtRef)}/resolve`, {
@@ -326,24 +322,26 @@ export class VantaApi {
     return this.client.post('/admin/reconciliation/csv', { csvContent });
   }
 
-  // ------------------------------------------------------- add money & otp
-  initiateAddMoney(input: {
+  // ------------------------------------- add money (manual admin fulfilment)
+  createAddMoneyRequest(input: {
     gateway: 'BKASH' | 'NAGAD' | 'BANK';
     senderNumber: string;
     amount: number;
-  }): Promise<InitiateAddMoneyResult> {
-    return this.client.post<InitiateAddMoneyResult>('/add-money/initiate', input);
+  }): Promise<AddMoneyRequestResult> {
+    return this.client.post<AddMoneyRequestResult>('/add-money', input);
   }
 
-  verifyAddMoneyOtp(input: {
-    sessionId: string;
-    otp: string;
-  }): Promise<VerifyAddMoneyOtpResult> {
-    return this.client.post<VerifyAddMoneyOtpResult>('/add-money/verify-otp', input);
+  // ------------------------------------- admin queue: approve / reject
+  adminPending(): Promise<AdminPendingQueue> {
+    return this.client.get<AdminPendingQueue>('/admin/pending');
   }
 
-  completeAddMoneyNow(trxId: string): Promise<CompleteAddMoneyResult> {
-    return this.client.post<CompleteAddMoneyResult>(`/add-money/complete-now/${encodeURIComponent(trxId)}`, {});
+  approveTransaction(trxId: string): Promise<FulfilmentResult> {
+    return this.client.post<FulfilmentResult>(`/admin/transactions/${encodeURIComponent(trxId)}/approve`, {});
+  }
+
+  rejectTransaction(trxId: string, reason?: string): Promise<FulfilmentResult> {
+    return this.client.post<FulfilmentResult>(`/admin/transactions/${encodeURIComponent(trxId)}/reject`, { reason });
   }
 
   // ------------------------------------------------------------ transactions

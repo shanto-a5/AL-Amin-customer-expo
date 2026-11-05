@@ -32,6 +32,7 @@ export interface TransactionDto {
     name: string;
     phone: string;
     customerId: string;
+    avatarUrl?: string;
   };
   type: TransactionType;
   operator: TelecomOperator | 'NONE';
@@ -41,6 +42,9 @@ export interface TransactionDto {
   amount: number;
   status: TransactionStatus;
   scheduledReleaseAt: string | null;
+  /** Deadline for the manual admin fulfilment window (never auto-settles). */
+  expiresAt?: string | null;
+  completedAt?: string | null;
   metadata: {
     offerTitle?: string | null;
     balanceBefore?: number | null;

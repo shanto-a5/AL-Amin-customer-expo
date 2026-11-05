@@ -1,20 +1,17 @@
 import { router } from 'expo-router';
 import * as React from 'react';
 import {
-  Keyboard,
   Modal,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 
 import {
   vantaApi,
-  type InitiateAddMoneyResult,
-  type VerifyAddMoneyOtpResult,
+  type AddMoneyRequestResult,
 } from '@/api/vanta-api';
 import { PageHeader, WalletMiniPill } from '@/components/fintech-ui';
 import {
@@ -24,12 +21,11 @@ import {
   NoticeCard,
   PrimaryButton,
   Screen,
-  SecondaryButton,
   SectionHeader,
   StatusIndicator,
   SummaryRow,
 } from '@/components/ui';
-import { withSession, type ProtectedRoute } from '@/modules/session/route-guard';
+import { withSession } from '@/modules/session/route-guard';
 import type { SessionContextValue } from '@/modules/session/session-context';
 import {
   baseFontFamily,
@@ -42,18 +38,11 @@ import {
   type,
   type GatewayCode,
 } from '@/theme/tokens';
+import { formatCountdown } from '@/utils/countdown';
 
 const QUICK_ADD_AMOUNTS = [500, 1000, 2000, 5000];
 const PROCESSING_NOTICE =
-  'আপনার অ্যাড মানি প্রসেসিং হচ্ছে। ১০ মিনিটের মধ্যে মূল অ্যাকাউন্টে ব্যালেন্স যোগ হয়ে যাবে।';
-
-function formatCountdown(targetIso: string | null, nowMs: number): string {
-  if (!targetIso) return '10:00';
-  const diffSec = Math.max(0, Math.ceil((new Date(targetIso).getTime() - nowMs) / 1000));
-  const mins = Math.floor(diffSec / 60);
-  const secs = diffSec % 60;
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
+  'আপনার অ্যাড মানি রিকোয়েস্ট প্রসেসিং হচ্ছে। অ্যাডমিন যাচাই করার পর ১০ মিনিটের মধ্যে মূল অ্যাকাউন্টে ব্যালেন্স যোগ হয়ে যাবে।';
 
 function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JSX.Element {
   const [gatewayCode, setGatewayCode] = React.useState<GatewayCode>('BKASH');
@@ -63,54 +52,37 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
 
   const [formError, setFormError] = React.useState<string | null>(null);
   const [initiating, setInitiating] = React.useState(false);
-
-  // Step 2: OTP Modal State
-  const [otpSession, setOtpSession] = React.useState<InitiateAddMoneyResult | null>(null);
-  const [otpInput, setOtpInput] = React.useState('');
-  const [otpError, setOtpError] = React.useState<string | null>(null);
-  const [verifyingOtp, setVerifyingOtp] = React.useState(false);
-  const [resendTimer, setResendTimer] = React.useState(120);
-
-  // Step 3: 10-Minute Processing State
-  const [verifiedHold, setVerifiedHold] = React.useState<VerifyAddMoneyOtpResult | null>(null);
-  const [completingNow, setCompletingNow] = React.useState(false);
-  const [completedBanner, setCompletedBanner] = React.useState<string | null>(null);
+  const [submissionSuccess, setSubmissionSuccess] = React.useState<AddMoneyRequestResult | null>(null);
   const [nowMs, setNowMs] = React.useState(() => Date.now());
 
   const activeGateway = GATEWAYS[gatewayCode];
   const numericAmount = Number.parseFloat(amountInput.replace(/[^\d.]/g, '')) || 0;
-
-  React.useEffect(() => {
-    if (!otpSession) return;
-    const timer = setInterval(() => {
-      setResendTimer((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [otpSession]);
 
   const pendingAddMoney = React.useMemo(
     () => session.user?.pendingAddMoney ?? [],
     [session.user?.pendingAddMoney],
   );
 
+  // Synchronized countdown timer tick and automatic polling while holds are active
   React.useEffect(() => {
-    if (!verifiedHold && pendingAddMoney.length === 0) return;
+    const hasActiveHolds = pendingAddMoney.length > 0 || Boolean(submissionSuccess);
+    if (!hasActiveHolds) return;
+
+    let pollCounter = 0;
     const timer = setInterval(() => {
-      const current = Date.now();
-      setNowMs(current);
-      if (
-        verifiedHold?.scheduledReleaseAt &&
-        new Date(verifiedHold.scheduledReleaseAt).getTime() <= current
-      ) {
+      setNowMs(Date.now());
+      pollCounter += 1;
+      // Refresh session from server every 4 seconds to detect admin approval
+      if (pollCounter % 4 === 0) {
         void session.refresh();
       }
     }, 1000);
+
     return () => clearInterval(timer);
-  }, [verifiedHold, pendingAddMoney.length, session]);
+  }, [pendingAddMoney.length, submissionSuccess, session]);
 
   const handleInitiate = async () => {
     setFormError(null);
-    setCompletedBanner(null);
 
     const cleanSender = senderNumber.trim();
     if (cleanSender.length < 6) {
@@ -124,60 +96,17 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
 
     setInitiating(true);
     try {
-      const result = await vantaApi.initiateAddMoney({
+      const result = await vantaApi.createAddMoneyRequest({
         gateway: gatewayCode,
         senderNumber: cleanSender,
         amount: numericAmount,
       });
-      setOtpInput(result.devOtp || '');
-      setOtpError(null);
-      setResendTimer(120);
-      setOtpSession(result);
+      await session.refresh();
+      setSubmissionSuccess(result);
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Could not initiate Add Money.');
+      setFormError(error instanceof Error ? error.message : 'Could not submit Add Money request.');
     } finally {
       setInitiating(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (!otpSession) return;
-    setOtpError(null);
-    const cleanOtp = otpInput.trim();
-    if (!/^\d{4}$/.test(cleanOtp)) {
-      setOtpError('৪ ডিজিটের ওটিপি কোড দিন · Enter the 4-digit OTP code.');
-      return;
-    }
-
-    setVerifyingOtp(true);
-    try {
-      const result = await vantaApi.verifyAddMoneyOtp({
-        sessionId: otpSession.sessionId,
-        otp: cleanOtp,
-      });
-      setOtpSession(null);
-      setVerifiedHold(result);
-      await session.refresh();
-    } catch (error) {
-      setOtpError(error instanceof Error ? error.message : 'Invalid OTP code.');
-    } finally {
-      setVerifyingOtp(false);
-    }
-  };
-
-  const handleCompleteNow = async (trxId: string) => {
-    setCompletingNow(true);
-    try {
-      const res = await vantaApi.completeAddMoneyNow(trxId);
-      await session.refresh();
-      setVerifiedHold(null);
-      setCompletedBanner(
-        `${formatBdt(res.transaction.amount)} (${res.transaction.paymentGateway}) credited to your wallet. Available balance: ${formatBdt(res.user?.balance ?? session.user?.balance ?? 0, true)}`,
-      );
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Could not complete transaction.');
-    } finally {
-      setCompletingNow(false);
     }
   };
 
@@ -189,15 +118,6 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
         title="Add Money"
         subtitle="বিকাশ, নগদ অথবা ব্যাংক থেকে আপনার ওয়ালেটে টাকা যোগ করুন"
       />
-
-      {completedBanner ? (
-        <NoticeCard
-          tone="success"
-          title="Balance credited"
-          message={completedBanner}
-          onDismiss={() => setCompletedBanner(null)}
-        />
-      ) : null}
 
       {formError ? (
         <NoticeCard
@@ -212,29 +132,19 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
       {pendingAddMoney.map((trx) => (
         <View key={trx.trxId} style={styles.holdBanner}>
           <View style={styles.holdTopRow}>
-            <StatusIndicator status="PROCESSING" label="Settlement hold" />
+            <StatusIndicator status="PROCESSING" label="Admin Verification in Progress" />
             <View style={styles.holdCountdownBadge}>
               <Text style={styles.holdCountdownValue}>
-                {formatCountdown(trx.scheduledReleaseAt, nowMs)}
+                {formatCountdown(trx.expiresAt || trx.scheduledReleaseAt, nowMs)}
               </Text>
             </View>
           </View>
           <Text style={styles.holdNoticeText}>{PROCESSING_NOTICE}</Text>
           <View style={styles.holdFooter}>
             <Text style={styles.holdMetaText}>
-              {trx.paymentGateway} · {formatBdt(trx.amount)} · {trx.trxId}
+              {trx.paymentGateway} · {formatBdt(trx.amount)} · Ref: {trx.trxId}
             </Text>
-            <Pressable
-              onPress={() => handleCompleteNow(trx.trxId)}
-              disabled={completingNow}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel="Simulate instant settlement"
-            >
-              <Text style={styles.holdActionLink}>
-                {completingNow ? 'Completing...' : 'Complete now →'}
-              </Text>
-            </Pressable>
+            <Text style={styles.holdAdminPendingBadge}>Waiting for Admin</Text>
           </View>
         </View>
       ))}
@@ -331,161 +241,66 @@ function AddMoneyScreen({ session }: { session: SessionContextValue }): React.JS
 
         <View style={{ height: spacing.lg }} />
         <PrimaryButton
-          title={`Continue · ${formatBdt(numericAmount)}`}
+          title={`Submit Request · ${formatBdt(numericAmount)}`}
           onPress={handleInitiate}
           loading={initiating}
           fullWidth
         />
       </Card>
 
-      {/* Step 2: 4-Digit OTP Verification Modal */}
+      {/* Submission Success & 10-Minute Countdown Modal */}
       <Modal
-        visible={Boolean(otpSession)}
+        visible={Boolean(submissionSuccess)}
         transparent
         animationType="fade"
-        onRequestClose={() => setOtpSession(null)}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
-              <View style={styles.modalHeaderRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={type.h2}>Verify OTP</Text>
-                  <Text style={[type.caption, { marginTop: 2 }]}>
-                    {activeGateway.bnName} ({otpSession?.senderNumber}) নম্বরে পাঠানো ৪-ডিজিট ওটিপি লিখুন
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => setOtpSession(null)}
-                  hitSlop={10}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close OTP verification"
-                >
-                  <AppIcon name="close" size={18} color={colors.textMuted} />
-                </Pressable>
-              </View>
-
-              {otpSession?.devOtp ? (
-                <Pressable
-                  onPress={() => setOtpInput(otpSession.devOtp ?? '1234')}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Use preview OTP ${otpSession.devOtp}`}
-                  style={styles.devOtpBar}
-                >
-                  <Text style={styles.devOtpText}>
-                    Preview OTP: {otpSession.devOtp} (tap to fill)
-                  </Text>
-                </Pressable>
-              ) : null}
-
-              <View style={styles.summaryBox}>
-                <SummaryRow
-                  label="Payment source"
-                  value={`${activeGateway.name} (${activeGateway.bnName})`}
-                  showDivider
-                />
-                <SummaryRow label="Sender" value={otpSession?.senderNumber ?? ''} showDivider />
-                <SummaryRow
-                  label="Amount"
-                  value={formatBdt(otpSession?.amount ?? 0)}
-                  tone="strong"
-                />
-              </View>
-
-              {otpError ? (
-                <NoticeCard tone="danger" title="OTP verification failed" message={otpError} />
-              ) : null}
-
-              <TextInput
-                value={otpInput}
-                onChangeText={(v) => setOtpInput(v.replace(/\D/g, '').slice(0, 4))}
-                placeholder="••••"
-                placeholderTextColor={colors.textFaint}
-                keyboardType="number-pad"
-                maxLength={4}
-                accessibilityLabel="4-digit OTP code"
-                style={styles.otpInput}
-              />
-
-              <Text style={styles.resendTimerText}>
-                {resendTimer > 0
-                  ? `Code expires in ${resendTimer}s`
-                  : 'Need a new code? Cancel and request again.'}
-              </Text>
-
-              <View style={styles.modalActions}>
-                <SecondaryButton
-                  title="Cancel"
-                  onPress={() => setOtpSession(null)}
-                  style={{ flex: 1 }}
-                />
-                <PrimaryButton
-                  title="Verify OTP"
-                  onPress={handleVerifyOtp}
-                  loading={verifyingOtp}
-                  style={{ flex: 1 }}
-                />
-              </View>
-            </View>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-
-      {/* Step 3: 10-Minute Hold Processing Status Modal */}
-      <Modal
-        visible={Boolean(verifiedHold)}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setVerifiedHold(null)}
+        onRequestClose={() => setSubmissionSuccess(null)}
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.holdIconCircle}>
-              <AppIcon name="clock" size={22} color={colors.warning} />
+              <AppIcon name="clock" size={24} color={colors.warning} />
             </View>
-            <Text style={styles.holdModalHeading}>Add Money processing</Text>
-            <Text style={styles.holdModalSub}>{PROCESSING_NOTICE}</Text>
+            <Text style={styles.holdModalHeading}>Request submitted · প্রসেসিং হচ্ছে</Text>
+            <Text style={styles.holdModalSub}>
+              Wait please 10 minutes! অ্যাডমিন আপনার ডিপোজিট যাচাই করার পর ওয়ালেটে ব্যালেন্স যোগ করে দেওয়া হবে।
+            </Text>
 
-            {verifiedHold ? (
+            {submissionSuccess ? (
               <View style={styles.summaryBox}>
+                <View style={styles.countdownBox}>
+                  <Text style={styles.countdownTitle}>Approval Window</Text>
+                  <Text style={styles.countdownLarge}>
+                    {formatCountdown(submissionSuccess.expiresAt, nowMs)}
+                  </Text>
+                </View>
                 <SummaryRow
                   label="Reference"
-                  value={verifiedHold.transaction.trxId}
+                  value={submissionSuccess.transaction.trxId}
                   tone="strong"
                   showDivider
                 />
                 <SummaryRow
-                  label="Source"
-                  value={verifiedHold.transaction.paymentGateway}
+                  label="Payment Source"
+                  value={submissionSuccess.transaction.paymentGateway}
+                  showDivider
+                />
+                <SummaryRow
+                  label="Sender"
+                  value={submissionSuccess.transaction.targetPhone}
                   showDivider
                 />
                 <SummaryRow
                   label="Amount"
-                  value={formatBdt(verifiedHold.transaction.amount)}
+                  value={formatBdt(submissionSuccess.transaction.amount)}
                   tone="strong"
-                  showDivider
-                />
-                <SummaryRow
-                  label="Estimated release"
-                  value={formatCountdown(verifiedHold.scheduledReleaseAt, nowMs)}
-                  tone="discount"
                 />
               </View>
             ) : null}
 
-            {verifiedHold ? (
-              <PrimaryButton
-                title="Simulate instant settlement"
-                onPress={() => handleCompleteNow(verifiedHold.transaction.trxId)}
-                loading={completingNow}
-                fullWidth
-              />
-            ) : null}
-            <View style={{ height: spacing.sm }} />
-            <SecondaryButton
-              title="Back to Home"
+            <PrimaryButton
+              title="Got it · ঠিক আছে"
               onPress={() => {
-                setVerifiedHold(null);
+                setSubmissionSuccess(null);
                 router.replace('/home');
               }}
               fullWidth
@@ -546,11 +361,11 @@ const styles = StyleSheet.create({
     color: colors.textFaint,
     flex: 1,
   },
-  holdActionLink: {
+  holdAdminPendingBadge: {
     fontFamily: baseFontFamily,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.warning,
   },
 
   gatewayRow: {
@@ -714,86 +529,64 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderStrong,
     padding: 20,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 14,
-  },
-  devOtpBar: {
-    backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-    borderRadius: radius.sm,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 14,
-  },
-  devOtpText: {
-    fontFamily: baseFontFamily,
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary,
-    textAlign: 'center',
-  },
-  summaryBox: {
-    backgroundColor: colors.surfaceSecondary,
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 14,
-  },
-  otpInput: {
-    fontFamily: baseFontFamily,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceSecondary,
-    paddingVertical: 12,
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.text,
-    textAlign: 'center',
-    letterSpacing: 10,
-    marginBottom: 10,
-  },
-  resendTimerText: {
-    fontFamily: baseFontFamily,
-    fontSize: 11.5,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
   },
   holdIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.warningSoft,
     borderWidth: 1,
-    borderColor: 'rgba(234, 179, 84, 0.30)',
-    alignSelf: 'center',
+    borderColor: 'rgba(234, 179, 84, 0.40)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   holdModalHeading: {
     ...type.h2,
     textAlign: 'center',
+    marginBottom: 6,
   },
   holdModalSub: {
-    ...type.caption,
+    fontFamily: baseFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textMuted,
     textAlign: 'center',
-    marginTop: 6,
     marginBottom: 16,
+  },
+  summaryBox: {
+    width: '100%',
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 18,
+  },
+  countdownBox: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+    marginBottom: 8,
+  },
+  countdownTitle: {
+    fontFamily: baseFontFamily,
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  countdownLarge: {
+    fontFamily: baseFontFamily,
+    fontSize: 28,
+    fontWeight: '800',
+    color: colors.warning,
   },
 });
 
-export default withSession(AddMoneyScreen, '/add-money' satisfies ProtectedRoute);
+export default withSession(AddMoneyScreen as React.ComponentType<{ session: SessionContextValue }>);

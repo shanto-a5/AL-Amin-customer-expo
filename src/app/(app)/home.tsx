@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import * as React from 'react';
 import {
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -35,14 +34,9 @@ import {
   type,
   type OperatorCode,
 } from '@/theme/tokens';
+import { formatCountdown } from '@/utils/countdown';
 
-function formatCountdown(targetIso: string | null, nowMs: number): string {
-  if (!targetIso) return '00:00';
-  const diffSec = Math.max(0, Math.ceil((new Date(targetIso).getTime() - nowMs) / 1000));
-  const mins = Math.floor(diffSec / 60);
-  const secs = diffSec % 60;
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
+
 
 function selectPopularOffers(all: OfferDto[]): OfferDto[] {
   if (all.length <= 3) return all;
@@ -75,7 +69,7 @@ function CustomerHomeScreen({ session }: { session: SessionContextValue }): Reac
   const [loadingOffers, setLoadingOffers] = React.useState(true);
 
   const [nowMs, setNowMs] = React.useState(() => Date.now());
-  const [completingTrxId, setCompletingTrxId] = React.useState<string | null>(null);
+  
   const [refreshing, setRefreshing] = React.useState(false);
 
   const loadOffers = React.useCallback(async () => {
@@ -114,32 +108,18 @@ function CustomerHomeScreen({ session }: { session: SessionContextValue }): Reac
 
   React.useEffect(() => {
     if (pendingAddMoney.length === 0) return;
+    let pollCount = 0;
     const interval = setInterval(() => {
-      const currentNow = Date.now();
-      setNowMs(currentNow);
-      const anyMatured = pendingAddMoney.some(
-        (trx) => trx.scheduledReleaseAt && new Date(trx.scheduledReleaseAt).getTime() <= currentNow,
-      );
-      if (anyMatured) {
+      setNowMs(Date.now());
+      pollCount += 1;
+      if (pollCount % 4 === 0) {
         void session.refresh();
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [pendingAddMoney, session]);
+  }, [pendingAddMoney.length, session]);
 
-  const handleInstantComplete = React.useCallback(
-    async (trxId: string) => {
-      setCompletingTrxId(trxId);
-      try {
-        await vantaApi.completeAddMoneyNow(trxId);
-        await session.refresh();
-      } finally {
-        setCompletingTrxId(null);
-      }
-    },
-    [session],
-  );
-
+  
   const onPullRefresh = React.useCallback(async () => {
     setRefreshing(true);
     try {
@@ -195,32 +175,20 @@ function CustomerHomeScreen({ session }: { session: SessionContextValue }): Reac
 
       {/* Active Processing Add Money Hold(s) */}
       {pendingAddMoney.map((trx) => {
-        const countdown = formatCountdown(trx.scheduledReleaseAt, nowMs);
+        const countdown = formatCountdown(trx.expiresAt || trx.scheduledReleaseAt, nowMs);
         return (
           <View key={trx.trxId} style={styles.pendingCard}>
             <View style={styles.pendingTopRow}>
-              <StatusIndicator status="PROCESSING" label="Add Money processing" />
+              <StatusIndicator status="PROCESSING" label="Verification in progress" />
               <View style={styles.countdownPill}>
                 <Text style={styles.countdownText}>{countdown}</Text>
               </View>
             </View>
             <Text style={styles.pendingBody}>
-              {trx.paymentGateway} · {formatBdt(trx.amount)} will be credited to your wallet within 10 minutes (অ্যাড মানি প্রসেসিং হচ্ছে).
+              {trx.paymentGateway} · {formatBdt(trx.amount)} verification window (অ্যাড মানি যাচাই করা হচ্ছে). Admin will credit your balance shortly.
             </Text>
             <View style={styles.pendingFooter}>
               <Text style={styles.pendingRef}>Ref: {trx.trxId}</Text>
-              <Pressable
-                onPress={() => handleInstantComplete(trx.trxId)}
-                disabled={completingTrxId === trx.trxId}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Simulate instant settlement"
-                style={({ pressed }) => [styles.settleAction, pressed && { opacity: 0.75 }]}
-              >
-                <Text style={styles.settleActionText}>
-                  {completingTrxId === trx.trxId ? 'Completing...' : 'Complete now →'}
-                </Text>
-              </Pressable>
             </View>
           </View>
         );

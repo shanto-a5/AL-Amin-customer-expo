@@ -73,14 +73,6 @@ export function UnifiedAuthScreen({
   const [formError, setFormError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
-  const fillDemoCustomer = React.useCallback(() => {
-    setMode('login');
-    setLoginPhone('01700000000');
-    setLoginPassword('123456');
-    setFieldError({});
-    setFormError(null);
-  }, []);
-
   const handlePickAvatar = React.useCallback(async () => {
     setFormError(null);
     const pick = await mediaService.pickImage('avatars');
@@ -277,22 +269,6 @@ export function UnifiedAuthScreen({
             loading={submitting}
             fullWidth
           />
-
-          {/* Demo Customer Helper */}
-          <View style={styles.demoCard}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.demoTitle}>Demo customer account</Text>
-              <Text style={styles.demoMeta}>01700000000 · Pass: 123456 · PIN: 1234</Text>
-            </View>
-            <Pressable
-              onPress={fillDemoCustomer}
-              accessibilityRole="button"
-              accessibilityLabel="Autofill demo customer credentials"
-              style={({ pressed }) => [styles.demoFillBtn, pressed && { opacity: 0.78 }]}
-            >
-              <Text style={styles.demoFillBtnText}>Autofill</Text>
-            </Pressable>
-          </View>
         </Card>
       ) : (
         <Card style={styles.authCard}>
@@ -447,43 +423,6 @@ const styles = StyleSheet.create({
   },
   authCard: {
     marginBottom: spacing.xl,
-  },
-  demoCard: {
-    marginTop: spacing.lg,
-    padding: 13,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  demoTitle: {
-    fontFamily: baseFontFamily,
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  demoMeta: {
-    fontFamily: baseFontFamily,
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  demoFillBtn: {
-    backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: radius.xs,
-  },
-  demoFillBtnText: {
-    fontFamily: baseFontFamily,
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: colors.primary,
   },
   avatarUploadRow: {
     flexDirection: 'row',

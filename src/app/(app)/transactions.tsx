@@ -38,6 +38,7 @@ import {
   type GatewayCode,
   type OperatorCode,
 } from '@/theme/tokens';
+import { formatCountdown } from '@/utils/countdown';
 
 function formatTrxTimestamp(iso: string): string {
   const date = new Date(iso);
@@ -103,7 +104,11 @@ function TransactionsHistoryScreen({
   const [refreshing, setRefreshing] = React.useState(false);
   const [typeFilter, setTypeFilter] = React.useState<'ALL' | TransactionType>('ALL');
   const [selectedTrx, setSelectedTrx] = React.useState<TransactionDto | null>(null);
-  const [completingId, setCompletingId] = React.useState<string | null>(null);
+  const [nowMs, setNowMs] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const loadHistory = React.useCallback(async () => {
     try {
@@ -124,17 +129,6 @@ function TransactionsHistoryScreen({
     return transactions.filter((t) => t.type === typeFilter);
   }, [transactions, typeFilter]);
 
-  const handleInstantSettle = async (trxId: string) => {
-    setCompletingId(trxId);
-    try {
-      await vantaApi.completeAddMoneyNow(trxId);
-      await session.refresh();
-      await loadHistory();
-      setSelectedTrx(null);
-    } finally {
-      setCompletingId(null);
-    }
-  };
 
   const handleShare = async (trx: TransactionDto) => {
     const text = [
@@ -237,18 +231,10 @@ function TransactionsHistoryScreen({
                     {formatBdt(trx.amount)}
                   </Text>
                   <StatusIndicator status={trx.status} />
-                  {trx.status === 'PROCESSING' && isAddMoney ? (
-                    <Pressable
-                      onPress={() => handleInstantSettle(trx.trxId)}
-                      hitSlop={6}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Settle ${trx.trxId} immediately`}
-                      style={styles.settleLinkBtn}
-                    >
-                      <Text style={styles.settleLinkText}>
-                        {completingId === trx.trxId ? 'Settling...' : 'Settle now →'}
-                      </Text>
-                    </Pressable>
+                  {(trx.status === 'PROCESSING' || trx.status === 'PENDING_DEBIT') && trx.expiresAt ? (
+                    <Text style={styles.countdownMiniPill}>
+                      {formatCountdown(trx.expiresAt, nowMs)}
+                    </Text>
                   ) : null}
                 </View>
               </Pressable>
@@ -337,17 +323,6 @@ function TransactionsHistoryScreen({
                   label="Date & time"
                   value={new Date(selectedTrx.createdAt).toLocaleString()}
                   tone="muted"
-                />
-              </View>
-            ) : null}
-
-            {selectedTrx?.status === 'PROCESSING' && selectedTrx.type === 'ADD_MONEY' ? (
-              <View style={{ marginBottom: spacing.sm }}>
-                <PrimaryButton
-                  title="Complete settlement now"
-                  onPress={() => handleInstantSettle(selectedTrx.trxId)}
-                  loading={completingId === selectedTrx.trxId}
-                  fullWidth
                 />
               </View>
             ) : null}
@@ -511,6 +486,13 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     gap: 10,
+  },
+  countdownMiniPill: {
+    fontFamily: baseFontFamily,
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+    marginTop: 4,
   },
 });
 

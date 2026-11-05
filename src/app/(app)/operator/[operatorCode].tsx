@@ -51,6 +51,7 @@ import {
   type,
   type OperatorCode,
 } from '@/theme/tokens';
+import { formatCountdown } from '@/utils/countdown';
 
 const QUICK_AMOUNTS = [50, 100, 200, 500];
 const BD_PHONE_RE = /^01[3-9]\d{8}$/;
@@ -87,6 +88,38 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
 
   const [receipt, setReceipt] = React.useState<RechargeReceipt | null>(null);
   const [copiedNotice, setCopiedNotice] = React.useState(false);
+  const [nowMs, setNowMs] = React.useState(() => Date.now());
+
+  // Live timer tick and auto-refresh while recharge is waiting for admin fulfillment
+  const activeReceiptStatus = receipt?.status ?? receipt?.transaction?.status;
+  const isWaitingAdmin = activeReceiptStatus === 'PENDING_DEBIT' || activeReceiptStatus === 'PROCESSING';
+
+  React.useEffect(() => {
+    if (!receipt || !isWaitingAdmin) return;
+    let pollCount = 0;
+    const timer = setInterval(async () => {
+      setNowMs(Date.now());
+      pollCount += 1;
+      if (pollCount % 3 === 0) {
+        try {
+          const res = await vantaApi.transactions({ limit: 8 });
+          const matched = res.transactions.find((t) => t.trxId === receipt.trxId || t.extRefNum === receipt.extRefNum);
+          if (matched && matched.status !== 'PENDING_DEBIT' && matched.status !== 'PROCESSING') {
+            setReceipt((prev) => prev ? {
+              ...prev,
+              status: matched.status,
+              balanceAfter: matched.metadata?.balanceAfter ?? prev.balanceAfter,
+              transaction: { ...prev.transaction, status: matched.status },
+            } : null);
+            await session.refresh();
+          }
+        } catch {
+          // ignore network polling hiccups
+        }
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [receipt, isWaitingAdmin, session]);
   const [receiptScale] = React.useState(() => new Animated.Value(1));
 
   const userBalance = session.user?.balance ?? 0;
@@ -696,18 +729,7 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
                 <NoticeCard tone="danger" title="PIN verification error" message={pinError} />
               ) : null}
 
-              <View style={styles.pinLabelRow}>
-                <Text style={styles.inputLabel}>4-digit PIN</Text>
-                <Pressable
-                  onPress={() => setPinInput('1234')}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel="Autofill demo PIN 1234"
-                  style={styles.demoPinChip}
-                >
-                  <Text style={styles.demoPinChipText}>Demo PIN: 1234</Text>
-                </Pressable>
-              </View>
+              <Text style={styles.inputLabel}>4-digit PIN</Text>
 
               <TextInput
                 value={pinInput}
@@ -765,13 +787,27 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
               />
             </View>
             <Text style={styles.receiptHeading}>
-              {receiptIsPendingDebit ? 'Pending Debit Verification' : 'Recharge completed'}
+              {activeReceiptStatus === 'COMPLETED'
+                ? 'Recharge completed'
+                : activeReceiptStatus === 'FAILED'
+                  ? 'Recharge rejected'
+                  : 'Recharge processing � ?????????'}
             </Text>
             <Text style={styles.receiptSubheading}>
-              {receiptIsPendingDebit
-                ? 'টেলিকম সুইচ থেকে চূড়ান্ত নিশ্চিতকরণের অপেক্ষায় (TXN_STATUS_INQUIRY)'
-                : 'রিচার্জ সফল হয়েছে · Verified digital receipt'}
+              {activeReceiptStatus === 'COMPLETED'
+                ? "Your recharge is complete. It's done."
+                : activeReceiptStatus === 'FAILED'
+                  ? 'Recharge rejected by admin. Balance has been refunded to your wallet.'
+                  : '???????? ????? ???? ?? ? ??????? ????? ??????? ??????? ????'}
             </Text>
+            {isWaitingAdmin ? (
+              <View style={styles.timerBadgeBox}>
+                <Text style={styles.timerBadgeLabel}>Approval countdown</Text>
+                <Text style={styles.timerBadgeValue}>
+                  {formatCountdown(receipt?.expiresAt || receipt?.transaction?.expiresAt, nowMs)}
+                </Text>
+              </View>
+            ) : null}
 
             {receipt ? (
               <View style={styles.summaryBox}>
@@ -852,6 +888,31 @@ function OperatorHubScreen({ session }: { session: SessionContextValue }): React
 }
 
 const styles = StyleSheet.create({
+  timerBadgeBox: {
+    alignItems: 'center',
+    backgroundColor: colors.warningSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(234, 179, 84, 0.35)',
+    borderRadius: radius.md,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  timerBadgeLabel: {
+    fontFamily: baseFontFamily,
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.warning,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  timerBadgeValue: {
+    fontFamily: baseFontFamily,
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.warning,
+    marginTop: 2,
+  },
   operatorIdentityRow: {
     flexDirection: 'row',
     alignItems: 'center',
